@@ -1,0 +1,622 @@
+# GraphQL Schema for LinkFlow
+
+scalar Time
+scalar JSON
+
+# Root Types
+type Query {
+  # User queries
+  me: User!
+  user(id: ID!): User
+  users(filter: UserFilter, page: Int, limit: Int): UserConnection!
+  
+  # Workflow queries
+  workflow(id: ID!): Workflow
+  workflows(filter: WorkflowFilter, page: Int, limit: Int): WorkflowConnection!
+  workflowVersions(workflowId: ID!): [WorkflowVersion!]!
+  
+  # Execution queries
+  execution(id: ID!): Execution
+  executions(filter: ExecutionFilter, page: Int, limit: Int): ExecutionConnection!
+  executionLog(executionId: ID!): [ExecutionLog!]!
+  
+  # Node queries
+  nodeTypes: [NodeType!]!
+  nodeType(type: String!): NodeType
+  
+  # Schedule queries
+  schedule(id: ID!): Schedule
+  schedules(filter: ScheduleFilter, page: Int, limit: Int): ScheduleConnection!
+  
+  # Credential queries
+  credential(id: ID!): Credential
+  credentials(filter: CredentialFilter, page: Int, limit: Int): CredentialConnection!
+  credentialTypes: [CredentialType!]!
+  
+  # Statistics
+  statistics: Statistics!
+  workflowStatistics(workflowId: ID!): WorkflowStatistics!
+}
+
+type Mutation {
+  # Auth mutations
+  register(input: RegisterInput!): AuthPayload!
+  login(input: LoginInput!): AuthPayload!
+  logout: Boolean!
+  refreshToken(refreshToken: String!): AuthPayload!
+  changePassword(oldPassword: String!, newPassword: String!): Boolean!
+  
+  # User mutations
+  updateProfile(input: UpdateProfileInput!): User!
+  deleteAccount: Boolean!
+  
+  # Workflow mutations
+  createWorkflow(input: CreateWorkflowInput!): Workflow!
+  updateWorkflow(id: ID!, input: UpdateWorkflowInput!): Workflow!
+  deleteWorkflow(id: ID!): Boolean!
+  activateWorkflow(id: ID!): Workflow!
+  deactivateWorkflow(id: ID!): Workflow!
+  duplicateWorkflow(id: ID!, name: String!): Workflow!
+  
+  # Execution mutations
+  executeWorkflow(workflowId: ID!, data: JSON): Execution!
+  stopExecution(id: ID!): Execution!
+  retryExecution(id: ID!): Execution!
+  
+  # Schedule mutations
+  createSchedule(input: CreateScheduleInput!): Schedule!
+  updateSchedule(id: ID!, input: UpdateScheduleInput!): Schedule!
+  deleteSchedule(id: ID!): Boolean!
+  pauseSchedule(id: ID!): Schedule!
+  resumeSchedule(id: ID!): Schedule!
+  
+  # Credential mutations
+  createCredential(input: CreateCredentialInput!): Credential!
+  updateCredential(id: ID!, input: UpdateCredentialInput!): Credential!
+  deleteCredential(id: ID!): Boolean!
+  testCredential(id: ID!): CredentialTestResult!
+  
+  # Node mutations
+  installNode(nodeType: String!): Boolean!
+  uninstallNode(nodeType: String!): Boolean!
+}
+
+type Subscription {
+  # Execution subscriptions
+  executionUpdates(executionId: ID!): ExecutionUpdate!
+  workflowExecutions(workflowId: ID!): ExecutionUpdate!
+  
+  # Workflow subscriptions
+  workflowChanges(workflowId: ID!): WorkflowChange!
+  
+  # Notification subscriptions
+  notifications: Notification!
+}
+
+# User Types
+type User {
+  id: ID!
+  email: String!
+  username: String
+  firstName: String
+  lastName: String
+  avatar: String
+  emailVerified: Boolean!
+  twoFactorEnabled: Boolean!
+  status: String!
+  roles: [Role!]!
+  teams: [Team!]!
+  createdAt: Time!
+  updatedAt: Time!
+  lastLoginAt: Time
+}
+
+type Role {
+  id: ID!
+  name: String!
+  description: String
+  permissions: [Permission!]!
+}
+
+type Permission {
+  id: ID!
+  name: String!
+  resource: String!
+  action: String!
+}
+
+type Team {
+  id: ID!
+  name: String!
+  description: String
+  members: [TeamMember!]!
+  createdAt: Time!
+}
+
+type TeamMember {
+  user: User!
+  role: String!
+  joinedAt: Time!
+}
+
+# Workflow Types
+type Workflow {
+  id: ID!
+  name: String!
+  description: String
+  user: User!
+  team: Team
+  nodes: [Node!]!
+  connections: [Connection!]!
+  settings: WorkflowSettings!
+  status: String!
+  isActive: Boolean!
+  version: Int!
+  tags: [String!]!
+  statistics: WorkflowStatistics
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type Node {
+  id: ID!
+  name: String!
+  type: String!
+  position: Position!
+  parameters: JSON!
+  disabled: Boolean!
+  retryCount: Int!
+  timeout: Int
+}
+
+type Connection {
+  id: ID!
+  source: String!
+  target: String!
+  sourcePort: String
+  targetPort: String
+  data: JSON
+}
+
+type Position {
+  x: Float!
+  y: Float!
+}
+
+type WorkflowSettings {
+  errorHandling: ErrorHandling!
+  timeout: Int
+  retryOnFailure: Boolean!
+  maxRetries: Int
+  saveDataOnError: Boolean!
+  timezone: String!
+}
+
+type ErrorHandling {
+  continueOnFail: Boolean!
+  retryInterval: Int
+  maxRetries: Int
+  errorWorkflow: String
+}
+
+type WorkflowVersion {
+  id: ID!
+  workflow: Workflow!
+  version: Int!
+  data: JSON!
+  changedBy: User!
+  changeNote: String
+  createdAt: Time!
+}
+
+# Execution Types
+type Execution {
+  id: ID!
+  workflow: Workflow!
+  version: Int!
+  status: String!
+  startedAt: Time!
+  finishedAt: Time
+  executionTime: Int
+  data: JSON
+  error: String
+  nodeExecutions: [NodeExecution!]!
+  createdBy: User
+  createdAt: Time!
+}
+
+type NodeExecution {
+  id: ID!
+  nodeId: String!
+  nodeType: String!
+  status: String!
+  startedAt: Time!
+  finishedAt: Time
+  inputData: JSON
+  outputData: JSON
+  error: String
+  retryCount: Int!
+}
+
+type ExecutionLog {
+  timestamp: Time!
+  level: String!
+  message: String!
+  nodeId: String
+  data: JSON
+}
+
+type ExecutionUpdate {
+  execution: Execution!
+  event: String!
+  timestamp: Time!
+}
+
+# Node Types
+type NodeType {
+  type: String!
+  name: String!
+  description: String!
+  category: String!
+  icon: String
+  color: String
+  version: String!
+  author: String
+  schema: NodeSchema!
+  config: NodeConfig!
+  status: String!
+  isBuiltin: Boolean!
+  isPublic: Boolean!
+  downloads: Int!
+  rating: Float
+  tags: [String!]!
+}
+
+type NodeSchema {
+  inputs: [SchemaField!]!
+  outputs: [SchemaField!]!
+  properties: JSON
+}
+
+type SchemaField {
+  name: String!
+  type: String!
+  label: String!
+  description: String
+  required: Boolean!
+  default: JSON
+  placeholder: String
+  options: [String!]
+  multiple: Boolean
+  help: String
+}
+
+type NodeConfig {
+  retryable: Boolean!
+  maxRetries: Int
+  timeout: Int
+  rateLimit: Int
+  cacheable: Boolean
+  requiresAuth: Boolean
+  supportsBatching: Boolean
+}
+
+# Schedule Types
+type Schedule {
+  id: ID!
+  name: String!
+  description: String
+  workflow: Workflow!
+  cronExpression: String!
+  timezone: String!
+  data: JSON
+  isActive: Boolean!
+  startDate: Time
+  endDate: Time
+  lastRunAt: Time
+  nextRunAt: Time
+  misfirePolicy: String!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+# Credential Types
+type Credential {
+  id: ID!
+  name: String!
+  type: String!
+  description: String
+  tags: [String!]!
+  isShared: Boolean!
+  isActive: Boolean!
+  lastUsedAt: Time
+  expiresAt: Time
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type CredentialType {
+  type: String!
+  name: String!
+  description: String!
+  icon: String
+  fields: [CredentialField!]!
+}
+
+type CredentialField {
+  name: String!
+  type: String!
+  label: String!
+  required: Boolean!
+  placeholder: String
+  help: String
+  sensitive: Boolean!
+  options: [String!]
+}
+
+type CredentialTestResult {
+  success: Boolean!
+  message: String
+  details: JSON
+}
+
+# Statistics Types
+type Statistics {
+  totalUsers: Int!
+  totalWorkflows: Int!
+  totalExecutions: Int!
+  activeWorkflows: Int!
+  runningExecutions: Int!
+  successRate: Float!
+}
+
+type WorkflowStatistics {
+  totalExecutions: Int!
+  successfulExecutions: Int!
+  failedExecutions: Int!
+  averageExecutionTime: Float!
+  lastExecutionAt: Time
+  successRate: Float!
+}
+
+type WorkflowChange {
+  workflow: Workflow!
+  changeType: String!
+  changedBy: User!
+  timestamp: Time!
+}
+
+type Notification {
+  id: ID!
+  type: String!
+  title: String!
+  message: String!
+  data: JSON
+  read: Boolean!
+  createdAt: Time!
+}
+
+# Auth Types
+type AuthPayload {
+  accessToken: String!
+  refreshToken: String!
+  expiresIn: Int!
+  user: User!
+}
+
+# Connection Types (Pagination)
+type UserConnection {
+  edges: [UserEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type UserEdge {
+  node: User!
+  cursor: String!
+}
+
+type WorkflowConnection {
+  edges: [WorkflowEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type WorkflowEdge {
+  node: Workflow!
+  cursor: String!
+}
+
+type ExecutionConnection {
+  edges: [ExecutionEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type ExecutionEdge {
+  node: Execution!
+  cursor: String!
+}
+
+type ScheduleConnection {
+  edges: [ScheduleEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type ScheduleEdge {
+  node: Schedule!
+  cursor: String!
+}
+
+type CredentialConnection {
+  edges: [CredentialEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type CredentialEdge {
+  node: Credential!
+  cursor: String!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+# Input Types
+input RegisterInput {
+  email: String!
+  password: String!
+  firstName: String
+  lastName: String
+}
+
+input LoginInput {
+  email: String!
+  password: String!
+}
+
+input UpdateProfileInput {
+  firstName: String
+  lastName: String
+  avatar: String
+}
+
+input CreateWorkflowInput {
+  name: String!
+  description: String
+  nodes: [NodeInput!]!
+  connections: [ConnectionInput!]!
+  settings: WorkflowSettingsInput
+  tags: [String!]
+}
+
+input UpdateWorkflowInput {
+  name: String
+  description: String
+  nodes: [NodeInput!]
+  connections: [ConnectionInput!]
+  settings: WorkflowSettingsInput
+  tags: [String!]
+}
+
+input NodeInput {
+  id: String!
+  name: String!
+  type: String!
+  position: PositionInput!
+  parameters: JSON!
+  disabled: Boolean
+  retryCount: Int
+  timeout: Int
+}
+
+input ConnectionInput {
+  id: String!
+  source: String!
+  target: String!
+  sourcePort: String
+  targetPort: String
+  data: JSON
+}
+
+input PositionInput {
+  x: Float!
+  y: Float!
+}
+
+input WorkflowSettingsInput {
+  errorHandling: ErrorHandlingInput
+  timeout: Int
+  retryOnFailure: Boolean
+  maxRetries: Int
+  saveDataOnError: Boolean
+  timezone: String
+}
+
+input ErrorHandlingInput {
+  continueOnFail: Boolean
+  retryInterval: Int
+  maxRetries: Int
+  errorWorkflow: String
+}
+
+input CreateScheduleInput {
+  name: String!
+  description: String
+  workflowId: ID!
+  cronExpression: String!
+  timezone: String
+  data: JSON
+  startDate: Time
+  endDate: Time
+  misfirePolicy: String
+}
+
+input UpdateScheduleInput {
+  name: String
+  description: String
+  cronExpression: String
+  timezone: String
+  data: JSON
+  startDate: Time
+  endDate: Time
+  misfirePolicy: String
+}
+
+input CreateCredentialInput {
+  name: String!
+  type: String!
+  description: String
+  data: JSON!
+  tags: [String!]
+  isShared: Boolean
+  expiresAt: Time
+}
+
+input UpdateCredentialInput {
+  name: String
+  description: String
+  data: JSON
+  tags: [String!]
+  isShared: Boolean
+  expiresAt: Time
+}
+
+# Filter Types
+input UserFilter {
+  email: String
+  status: String
+  role: String
+}
+
+input WorkflowFilter {
+  name: String
+  status: String
+  isActive: Boolean
+  tags: [String!]
+  userId: ID
+  teamId: ID
+}
+
+input ExecutionFilter {
+  workflowId: ID
+  status: String
+  startedAfter: Time
+  startedBefore: Time
+}
+
+input ScheduleFilter {
+  workflowId: ID
+  isActive: Boolean
+}
+
+input CredentialFilter {
+  type: String
+  isActive: Boolean
+  tags: [String!]
+}

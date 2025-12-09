@@ -1,0 +1,295 @@
+# Default values for linkflow.
+# This is a YAML-formatted file.
+
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# Common configuration
+common:
+  image:
+    registry: docker.io
+    repository: linkflow
+    tag: latest
+    pullPolicy: IfNotPresent
+
+# Service Mesh
+serviceMesh:
+  enabled: true
+  istio:
+    enabled: true
+    mtls:
+      mode: STRICT
+
+# API Gateway
+gateway:
+  enabled: true
+  type: LoadBalancer
+  port: 80
+  httpsPort: 443
+  annotations: {}
+  ingress:
+    enabled: true
+    className: nginx
+    hostname: linkflow.local
+    tls:
+      enabled: true
+      secretName: linkflow-tls
+
+# Services Configuration
+services:
+  auth:
+    enabled: true
+    replicaCount: 3
+    image:
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 8001
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+
+  user:
+    enabled: true
+    replicaCount: 3
+    service:
+      port: 8002
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+  workflow:
+    enabled: true
+    replicaCount: 3
+    service:
+      port: 8003
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "500m"
+      limits:
+        memory: "1Gi"
+        cpu: "1000m"
+
+  execution:
+    enabled: true
+    replicaCount: 5
+    service:
+      port: 8004
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "2000m"
+
+  executor:
+    enabled: true
+    replicaCount: 10
+    autoscaling:
+      enabled: true
+      minReplicas: 10
+      maxReplicas: 100
+      targetCPUUtilizationPercentage: 70
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+
+  node:
+    enabled: true
+    replicaCount: 3
+    service:
+      port: 8005
+
+  credential:
+    enabled: true
+    replicaCount: 2
+    service:
+      port: 8006
+
+  webhook:
+    enabled: true
+    replicaCount: 3
+    service:
+      port: 8007
+
+  schedule:
+    enabled: true
+    replicaCount: 2
+    service:
+      port: 8008
+
+  notification:
+    enabled: true
+    replicaCount: 2
+    service:
+      port: 8009
+
+  audit:
+    enabled: true
+    replicaCount: 2
+    service:
+      port: 8010
+
+  analytics:
+    enabled: true
+    replicaCount: 2
+    service:
+      port: 8011
+
+  storage:
+    enabled: true
+    replicaCount: 2
+    service:
+      port: 8012
+
+  search:
+    enabled: true
+    replicaCount: 2
+    service:
+      port: 8013
+
+  billing:
+    enabled: false
+    replicaCount: 2
+    service:
+      port: 8014
+
+# GraphQL Gateway
+graphql:
+  enabled: true
+  replicaCount: 3
+  service:
+    type: ClusterIP
+    port: 4000
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# Database Configuration
+postgresql:
+  enabled: true
+  auth:
+    username: linkflow
+    password: linkflow123
+    database: linkflow
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+  readReplicas:
+    replicaCount: 2
+
+# Redis Configuration
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: redis123
+  master:
+    persistence:
+      enabled: true
+      size: 5Gi
+  replica:
+    replicaCount: 2
+
+# Kafka Configuration
+kafka:
+  enabled: true
+  replicaCount: 3
+  persistence:
+    enabled: true
+    size: 10Gi
+  zookeeper:
+    enabled: true
+    replicaCount: 3
+
+# Elasticsearch Configuration
+elasticsearch:
+  enabled: true
+  master:
+    replicaCount: 3
+    persistence:
+      enabled: true
+      size: 10Gi
+  data:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      size: 20Gi
+
+# Monitoring Stack
+monitoring:
+  prometheus:
+    enabled: true
+    retention: 30d
+    persistence:
+      enabled: true
+      size: 50Gi
+  grafana:
+    enabled: true
+    adminPassword: admin123
+  jaeger:
+    enabled: true
+    collector:
+      replicaCount: 2
+    query:
+      replicaCount: 2
+
+# Security
+security:
+  networkPolicies:
+    enabled: true
+  podSecurityPolicies:
+    enabled: false
+  secrets:
+    jwtSecret: "your-super-secret-jwt-key"
+    encryptionKey: "your-32-byte-encryption-key-here"
+
+# Backup
+backup:
+  enabled: false
+  schedule: "0 2 * * *"
+  retention: 7
+
+# Resource Quotas
+resourceQuota:
+  enabled: false
+  limits:
+    cpu: "100"
+    memory: "200Gi"
+    persistentvolumeclaims: "10"
+
+# Node Selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
