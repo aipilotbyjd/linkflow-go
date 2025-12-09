@@ -32,7 +32,7 @@ type Server struct {
 
 func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	// Initialize database
-	db, err := database.New(cfg.Database)
+	db, err := database.New(cfg.Database.ToDatabaseConfig())
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
@@ -51,7 +51,7 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	}
 
 	// Initialize event bus
-	eventBus, err := events.NewKafkaEventBus(cfg.Kafka)
+	eventBus, err := events.NewKafkaEventBus(cfg.Kafka.ToKafkaConfig())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create event bus: %w", err)
 	}

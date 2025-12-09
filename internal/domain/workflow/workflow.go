@@ -290,3 +290,41 @@ func (w *Workflow) ToJSON() (string, error) {
 	}
 	return string(data), nil
 }
+
+// Request types for workflow operations
+type CreateWorkflowRequest struct {
+	UserID      string                 `json:"-"`
+	Name        string                 `json:"name" binding:"required"`
+	Description string                 `json:"description"`
+	Nodes       []Node                 `json:"nodes"`
+	Connections []Connection           `json:"connections"`
+	Settings    map[string]interface{} `json:"settings"`
+	Tags        []string               `json:"tags"`
+}
+
+type UpdateWorkflowRequest struct {
+	WorkflowID  string                 `json:"-"`
+	UserID      string                 `json:"-"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Nodes       []Node                 `json:"nodes"`
+	Connections []Connection           `json:"connections"`
+	Settings    map[string]interface{} `json:"settings"`
+	Tags        []string               `json:"tags"`
+	Version     int                    `json:"version"`
+}
+
+type CreateVersionRequest struct {
+	Message string `json:"message"`
+	Changes string `json:"changes"`
+}
+
+type CreateTemplateRequest struct {
+	CreatorID   string                 `json:"-"`
+	Name        string                 `json:"name" binding:"required"`
+	Description string                 `json:"description"`
+	Category    string                 `json:"category"`
+	Icon        string                 `json:"icon"`
+	Workflow    Workflow               `json:"workflow"`
+	Tags        []string               `json:"tags"`
+}

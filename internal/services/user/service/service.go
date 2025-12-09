@@ -35,17 +35,17 @@ func (s *UserService) CheckReady() error {
 	return nil
 }
 
-func (s *UserService) HandleUserRegistered(ctx context.Context, event interface{}) error {
-	s.logger.Info("Handling user registered event")
+func (s *UserService) HandleUserRegistered(ctx context.Context, event events.Event) error {
+	s.logger.Info("Handling user registered event", "type", event.Type, "id", event.ID)
 	return nil
 }
 
-func (s *UserService) HandleUserDeleted(ctx context.Context, event interface{}) error {
-	s.logger.Info("Handling user deleted event")
+func (s *UserService) HandleUserDeleted(ctx context.Context, event events.Event) error {
+	s.logger.Info("Handling user deleted event", "type", event.Type, "id", event.ID)
 	return nil
 }
 
-func (s *UserService) HandleWorkflowCreated(ctx context.Context, event interface{}) error {
+func (s *UserService) HandleWorkflowCreated(ctx context.Context, event events.Event) error {
 	s.logger.Info("Handling workflow created event for ownership tracking")
 	return nil
 }

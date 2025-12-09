@@ -30,7 +30,7 @@ type Server struct {
 
 func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	// Initialize database
-	db, err := database.New(cfg.Database)
+	db, err := database.New(cfg.Database.ToDatabaseConfig())
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
@@ -49,16 +49,17 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	}
 
 	// Initialize event bus
-	eventBus, err := events.NewKafkaEventBus(cfg.Kafka)
+	eventBus, err := events.NewKafkaEventBus(cfg.Kafka.ToKafkaConfig())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create event bus: %w", err)
 	}
 
 	// Initialize notification channels
-	emailChannel := channels.NewEmailChannel(cfg.SMTP)
-	smsChannel := channels.NewSMSChannel(cfg.Twilio)
-	slackChannel := channels.NewSlackChannel(cfg.Slack.Token)
-	pushChannel := channels.NewPushChannel(cfg.FCM)
+	// TODO: Add SMTP, Twilio, Slack, FCM config to config.Config
+	emailChannel := channels.NewEmailChannel(nil)
+	smsChannel := channels.NewSMSChannel(nil)
+	slackChannel := channels.NewSlackChannel("")
+	pushChannel := channels.NewPushChannel(nil)
 	teamsChannel := channels.NewTeamsChannel()
 	discordChannel := channels.NewDiscordChannel()
 

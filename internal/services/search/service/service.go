@@ -34,8 +34,8 @@ func NewSearchService(
 	}
 }
 
-func (s *SearchService) HandleIndexEvent(ctx context.Context, event interface{}) error {
-	s.logger.Info("Handling index event")
+func (s *SearchService) HandleIndexEvent(ctx context.Context, event events.Event) error {
+	s.logger.Info("Handling index event", "type", event.Type, "id", event.ID)
 	// Index document in Elasticsearch
 	return s.indexer.IndexDocument(ctx, event)
 }

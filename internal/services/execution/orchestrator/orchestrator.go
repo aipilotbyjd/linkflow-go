@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -14,7 +13,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type WorkflowOrchestrator struct {
+// Orchestrator is the main workflow orchestrator
+type Orchestrator struct {
 	repository   ExecutionRepository
 	eventBus     events.EventBus
 	redis        *redis.Client
@@ -23,6 +23,9 @@ type WorkflowOrchestrator struct {
 	executorsMux sync.RWMutex
 	stopCh       chan struct{}
 }
+
+// WorkflowOrchestrator is an alias for Orchestrator for backward compatibility
+type WorkflowOrchestrator = Orchestrator
 
 type ExecutionRepository interface {
 	Create(ctx context.Context, execution *workflow.WorkflowExecution) error

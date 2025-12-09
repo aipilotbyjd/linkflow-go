@@ -22,8 +22,8 @@ func NewAuditService(repo *repository.AuditRepository, eventBus events.EventBus,
 	}
 }
 
-func (s *AuditService) LogEvent(ctx context.Context, event interface{}) error {
-	s.logger.Info("Logging audit event")
+func (s *AuditService) LogEvent(ctx context.Context, event events.Event) error {
+	s.logger.Info("Logging audit event", "type", event.Type, "id", event.ID)
 	// Audit logging logic
 	return nil
 }

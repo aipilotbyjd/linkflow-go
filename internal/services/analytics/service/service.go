@@ -30,8 +30,8 @@ func NewAnalyticsService(
 	}
 }
 
-func (s *AnalyticsService) ProcessEvent(ctx context.Context, event interface{}) error {
+func (s *AnalyticsService) ProcessEvent(ctx context.Context, event events.Event) error {
 	// Process analytics events
-	s.logger.Info("Processing analytics event")
+	s.logger.Info("Processing analytics event", "type", event.Type, "id", event.ID)
 	return nil
 }

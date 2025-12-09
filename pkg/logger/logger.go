@@ -21,11 +21,11 @@ type zapLogger struct {
 }
 
 type Config struct {
-	Level      string
-	Format     string
-	Output     string
-	AddCaller  bool
-	Stacktrace bool
+	Level      string `mapstructure:"level"`
+	Format     string `mapstructure:"format"`
+	Output     string `mapstructure:"output"`
+	AddCaller  bool   `mapstructure:"add_caller"`
+	Stacktrace bool   `mapstructure:"stacktrace"`
 }
 
 func New(cfg Config) Logger {

@@ -34,17 +34,17 @@ func NewWebhookService(
 	}
 }
 
-func (s *WebhookService) HandleWorkflowExecuted(ctx context.Context, event interface{}) error {
+func (s *WebhookService) HandleWorkflowExecuted(ctx context.Context, event events.Event) error {
 	s.logger.Info("Handling workflow executed event for webhook")
 	return nil
 }
 
-func (s *WebhookService) HandleWorkflowFailed(ctx context.Context, event interface{}) error {
+func (s *WebhookService) HandleWorkflowFailed(ctx context.Context, event events.Event) error {
 	s.logger.Info("Handling workflow failed event for webhook")
 	return nil
 }
 
-func (s *WebhookService) HandleExecutionCompleted(ctx context.Context, event interface{}) error {
+func (s *WebhookService) HandleExecutionCompleted(ctx context.Context, event events.Event) error {
 	s.logger.Info("Handling execution completed event for webhook")
 	return nil
 }

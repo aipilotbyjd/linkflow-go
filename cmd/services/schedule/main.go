@@ -20,7 +20,7 @@ func main() {
 	}
 
 	// Initialize logger
-	log := logger.New(cfg.Logger)
+	log := logger.New(cfg.Logger.ToLoggerConfig())
 
 	// Create and start server
 	srv, err := server.New(cfg, log)

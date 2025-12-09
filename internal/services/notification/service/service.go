@@ -47,8 +47,8 @@ func NewNotificationService(
 	}
 }
 
-func (s *NotificationService) HandleEvent(ctx context.Context, event interface{}) error {
-	s.logger.Info("Handling notification event")
+func (s *NotificationService) HandleEvent(ctx context.Context, event events.Event) error {
+	s.logger.Info("Handling notification event", "type", event.Type, "id", event.ID)
 	// Process event and send notifications
 	return nil
 }

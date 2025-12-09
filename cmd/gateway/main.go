@@ -26,7 +26,7 @@ func main() {
 	}
 
 	// Initialize logger
-	log := logger.New(cfg.Logger)
+	log := logger.New(cfg.Logger.ToLoggerConfig())
 
 	// Create resolver
 	resolver := resolver.NewResolver(cfg, log)

@@ -34,22 +34,22 @@ func NewCredentialService(
 	}
 }
 
-func (s *CredentialService) HandleCredentialExpiring(ctx context.Context, event interface{}) error {
-	s.logger.Info("Handling credential expiring event")
+func (s *CredentialService) HandleCredentialExpiring(ctx context.Context, event events.Event) error {
+	s.logger.Info("Handling credential expiring event", "type", event.Type, "id", event.ID)
 	return nil
 }
 
-func (s *CredentialService) HandleCredentialExpired(ctx context.Context, event interface{}) error {
-	s.logger.Info("Handling credential expired event")
+func (s *CredentialService) HandleCredentialExpired(ctx context.Context, event events.Event) error {
+	s.logger.Info("Handling credential expired event", "type", event.Type, "id", event.ID)
 	return nil
 }
 
-func (s *CredentialService) HandleOAuthTokenExpired(ctx context.Context, event interface{}) error {
-	s.logger.Info("Handling OAuth token expired event")
+func (s *CredentialService) HandleOAuthTokenExpired(ctx context.Context, event events.Event) error {
+	s.logger.Info("Handling OAuth token expired event", "type", event.Type, "id", event.ID)
 	return nil
 }
 
-func (s *CredentialService) HandleSecurityBreach(ctx context.Context, event interface{}) error {
-	s.logger.Warn("Handling security breach event")
+func (s *CredentialService) HandleSecurityBreach(ctx context.Context, event events.Event) error {
+	s.logger.Warn("Handling security breach event", "type", event.Type, "id", event.ID)
 	return nil
 }

@@ -174,17 +174,17 @@ func (s *WorkflowService) GetPopularTags(ctx context.Context, limit int) ([]stri
 	return []string{}, nil
 }
 
-func (s *WorkflowService) HandleExecutionCompleted(ctx context.Context, event interface{}) error {
+func (s *WorkflowService) HandleExecutionCompleted(ctx context.Context, event events.Event) error {
 	s.logger.Info("Handling execution completed for workflow stats")
 	return nil
 }
 
-func (s *WorkflowService) HandleExecutionFailed(ctx context.Context, event interface{}) error {
+func (s *WorkflowService) HandleExecutionFailed(ctx context.Context, event events.Event) error {
 	s.logger.Info("Handling execution failed for workflow stats")
 	return nil
 }
 
-func (s *WorkflowService) HandleNodeUpdated(ctx context.Context, event interface{}) error {
+func (s *WorkflowService) HandleNodeUpdated(ctx context.Context, event events.Event) error {
 	s.logger.Info("Handling node updated for workflow validation")
 	return nil
 }

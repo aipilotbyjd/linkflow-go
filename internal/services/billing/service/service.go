@@ -34,7 +34,7 @@ func NewBillingService(
 	}
 }
 
-func (s *BillingService) HandleBillingEvent(ctx context.Context, event interface{}) error {
-	s.logger.Info("Handling billing event")
+func (s *BillingService) HandleBillingEvent(ctx context.Context, event events.Event) error {
+	s.logger.Info("Handling billing event", "type", event.Type, "id", event.ID)
 	return nil
 }
