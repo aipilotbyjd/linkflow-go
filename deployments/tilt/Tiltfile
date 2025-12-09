@@ -1,0 +1,156 @@
+# Tiltfile for LinkFlow local development
+
+load('ext://restart_process', 'docker_build_with_restart')
+load('ext://namespace', 'namespace_create')
+
+# Create namespace
+namespace_create('linkflow-dev')
+
+# Set default registry
+default_registry('localhost:5000')
+
+# Define services
+services = [
+    'auth',
+    'user',
+    'workflow',
+    'execution',
+    'executor',
+    'node',
+    'credential',
+    'schedule',
+    'notification',
+    'webhook',
+    'analytics',
+    'audit',
+    'storage',
+    'search',
+    'billing'
+]
+
+# Build and deploy each service
+for service in services:
+    # Build Docker image with live update
+    docker_build_with_restart(
+        'linkflow/' + service + '-service',
+        '.',
+        dockerfile='deployments/docker/Dockerfile.' + service,
+        entrypoint=['/app/' + service + '-service'],
+        only=[
+            './cmd/services/' + service,
+            './internal/services/' + service,
+            './internal/domain',
+            './pkg',
+            './go.mod',
+            './go.sum'
+        ],
+        live_update=[
+            sync('./cmd/services/' + service, '/app/cmd/services/' + service),
+            sync('./internal/services/' + service, '/app/internal/services/' + service),
+            sync('./internal/domain', '/app/internal/domain'),
+            sync('./pkg', '/app/pkg'),
+            run('go mod download', trigger=['./go.mod', './go.sum']),
+            run('go build -o /app/' + service + '-service ./cmd/services/' + service, 
+                trigger=['./cmd/services/' + service, './internal/services/' + service])
+        ]
+    )
+    
+    # Deploy to Kubernetes
+    k8s_yaml('deployments/k8s/' + service + '-service.yaml')
+    
+    # Configure port forwarding
+    k8s_resource(
+        service + '-service',
+        port_forwards=get_service_port(service),
+        resource_deps=['postgres', 'redis', 'kafka']
+    )
+
+# Deploy infrastructure
+k8s_yaml('deployments/k8s/infrastructure.yaml')
+
+# Infrastructure resources
+k8s_resource('postgres', port_forwards='5432:5432')
+k8s_resource('redis', port_forwards='6379:6379')
+k8s_resource('kafka', port_forwards='9092:9092')
+k8s_resource('elasticsearch', port_forwards='9200:9200')
+k8s_resource('prometheus', port_forwards='9090:9090')
+k8s_resource('grafana', port_forwards='3000:3000')
+k8s_resource('jaeger', port_forwards='16686:16686')
+
+# Helper function to get service port
+def get_service_port(service):
+    port_map = {
+        'auth': '8001:8001',
+        'user': '8002:8002',
+        'workflow': '8003:8003',
+        'execution': '8004:8004',
+        'executor': '8005:8005',
+        'node': '8006:8006',
+        'credential': '8007:8007',
+        'schedule': '8008:8008',
+        'notification': '8009:8009',
+        'webhook': '8010:8010',
+        'analytics': '8011:8011',
+        'audit': '8012:8012',
+        'storage': '8013:8013',
+        'search': '8014:8014',
+        'billing': '8015:8015'
+    }
+    return port_map.get(service, '8000:8000')
+
+# Watch for test files
+watch_file('tests/')
+
+# Custom commands
+local_resource(
+    'run-tests',
+    'go test ./...',
+    deps=['./internal', './pkg', './cmd'],
+    labels=['test']
+)
+
+local_resource(
+    'lint',
+    'golangci-lint run',
+    deps=['./internal', './pkg', './cmd'],
+    labels=['lint']
+)
+
+local_resource(
+    'migrate',
+    'go run ./scripts/migrate.go up',
+    deps=['./deployments/migrations'],
+    labels=['database']
+)
+
+# Button to reset database
+local_resource(
+    'reset-db',
+    'kubectl delete -n linkflow-dev pvc postgres-data && kubectl rollout restart -n linkflow-dev deployment/postgres',
+    labels=['database']
+)
+
+# Health check dashboard
+local_resource(
+    'health-dashboard',
+    serve_cmd='python3 scripts/health_dashboard.py',
+    serve_dir='.',
+    labels=['monitoring']
+)
+
+# Print helpful information
+print("""
+🚀 LinkFlow Development Environment
+
+Services are starting up. Access them at:
+- Auth Service: http://localhost:8001
+- User Service: http://localhost:8002
+- Workflow Service: http://localhost:8003
+- Execution Service: http://localhost:8004
+- Grafana: http://localhost:3000 (admin/admin)
+- Prometheus: http://localhost:9090
+- Jaeger: http://localhost:16686
+
+Run 'tilt up' to start development.
+Press Ctrl+C to stop.
+""")

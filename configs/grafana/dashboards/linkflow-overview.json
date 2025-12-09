@@ -1,0 +1,168 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "linkflow-overview",
+    "title": "LinkFlow Overview Dashboard",
+    "tags": ["linkflow", "overview"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 0,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 8},
+        "type": "stat",
+        "title": "Total Workflows",
+        "targets": [
+          {
+            "expr": "count(workflow_created_total)",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 100, "color": "yellow"},
+                {"value": 1000, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "gridPos": {"x": 6, "y": 0, "w": 6, "h": 8},
+        "type": "stat",
+        "title": "Active Executions",
+        "targets": [
+          {
+            "expr": "sum(execution_status_total{status=\"running\"})",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 3,
+        "gridPos": {"x": 12, "y": 0, "w": 6, "h": 8},
+        "type": "stat",
+        "title": "Success Rate",
+        "targets": [
+          {
+            "expr": "sum(rate(execution_status_total{status=\"completed\"}[5m])) / sum(rate(execution_status_total[5m])) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 80, "color": "yellow"},
+                {"value": 95, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "gridPos": {"x": 18, "y": 0, "w": 6, "h": 8},
+        "type": "stat",
+        "title": "Total Users",
+        "targets": [
+          {
+            "expr": "count(user_registered_total)",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "type": "graph",
+        "title": "Executions Over Time",
+        "targets": [
+          {
+            "expr": "sum(rate(execution_status_total[5m])) by (status)",
+            "legendFormat": "{{status}}",
+            "refId": "A"
+          }
+        ],
+        "xaxis": {"mode": "time"},
+        "yaxis": {"format": "short"}
+      },
+      {
+        "id": 6,
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "type": "graph",
+        "title": "API Request Rate",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[5m])) by (service)",
+            "legendFormat": "{{service}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "gridPos": {"x": 0, "y": 16, "w": 8, "h": 8},
+        "type": "piechart",
+        "title": "Node Type Distribution",
+        "targets": [
+          {
+            "expr": "sum(node_executions_total) by (node_type)",
+            "legendFormat": "{{node_type}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "gridPos": {"x": 8, "y": 16, "w": 8, "h": 8},
+        "type": "heatmap",
+        "title": "Execution Duration Heatmap",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(execution_duration_seconds_bucket[5m])) by (le))",
+            "format": "heatmap",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "gridPos": {"x": 16, "y": 16, "w": 8, "h": 8},
+        "type": "alertlist",
+        "title": "Active Alerts"
+      },
+      {
+        "id": 10,
+        "gridPos": {"x": 0, "y": 24, "w": 24, "h": 8},
+        "type": "table",
+        "title": "Top Workflows by Execution Count",
+        "targets": [
+          {
+            "expr": "topk(10, sum(execution_status_total) by (workflow_id))",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }
+        ]
+      }
+    ]
+  }
+}

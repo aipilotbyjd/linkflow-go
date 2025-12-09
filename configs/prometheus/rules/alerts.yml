@@ -1,0 +1,143 @@
+groups:
+  - name: linkflow_service_alerts
+    interval: 30s
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~".*-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been down for more than 2 minutes."
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High error rate on {{ $labels.service }}"
+          description: "Error rate is above 5% for {{ $labels.service }}."
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le)) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High latency on {{ $labels.service }}"
+          description: "99th percentile latency is above 1s for {{ $labels.service }}."
+
+      - alert: ExecutionQueueBacklog
+        expr: execution_queue_length > 1000
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Execution queue backlog is growing"
+          description: "Execution queue has more than 1000 pending items."
+
+      - alert: WorkerPoolExhausted
+        expr: worker_pool_available == 0
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Worker pool is exhausted"
+          description: "No available workers in the pool for more than 5 minutes."
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: database_connections_available == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Database connection pool exhausted"
+          description: "No available database connections for {{ $labels.service }}."
+
+      - alert: KafkaConsumerLag
+        expr: kafka_consumer_lag > 10000
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Kafka consumer lag is high"
+          description: "Consumer {{ $labels.consumer_group }} has lag > 10000 messages."
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis memory usage is above 90%."
+
+      - alert: ElasticsearchClusterYellow
+        expr: elasticsearch_cluster_health_status{color="yellow"} == 1
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Elasticsearch cluster status is yellow"
+          description: "Elasticsearch cluster has been yellow for more than 10 minutes."
+
+      - alert: ElasticsearchClusterRed
+        expr: elasticsearch_cluster_health_status{color="red"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Elasticsearch cluster status is red"
+          description: "Elasticsearch cluster is in red state - immediate action required!"
+
+      - alert: PodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Pod {{ $labels.pod }} is crash looping"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is crash looping."
+
+      - alert: HighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High CPU usage for {{ $labels.pod }}"
+          description: "Pod {{ $labels.pod }} CPU usage is above 80% for 10 minutes."
+
+      - alert: HighMemoryUsage
+        expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High memory usage for {{ $labels.pod }}"
+          description: "Pod {{ $labels.pod }} memory usage is above 90%."
+
+      - alert: DiskSpaceRunningOut
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "Disk space running out on {{ $labels.instance }}"
+          description: "Less than 10% disk space remaining on {{ $labels.instance }}."
