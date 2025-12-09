@@ -32,7 +32,7 @@ type Worker struct {
 
 func NewPool(cfg *config.Config, log logger.Logger) (*Pool, error) {
 	// Initialize event bus
-	eventBus, err := events.NewKafkaEventBus(cfg.Kafka)
+	eventBus, err := events.NewKafkaEventBus(cfg.Kafka.ToKafkaConfig())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create event bus: %w", err)
 	}

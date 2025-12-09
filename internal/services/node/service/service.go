@@ -31,10 +31,16 @@ func NewNodeService(
 }
 
 func (s *NodeService) GetNodeTypes(ctx context.Context) ([]interface{}, error) {
-	return s.registry.GetAllNodeTypes(), nil
+	nodeTypes := s.registry.GetAllNodeTypes()
+	result := make([]interface{}, len(nodeTypes))
+	for i, nt := range nodeTypes {
+		result[i] = nt
+	}
+	return result, nil
 }
 
 func (s *NodeService) ExecuteNode(ctx context.Context, nodeType string, input map[string]interface{}) (map[string]interface{}, error) {
 	s.logger.Info("Executing node", "type", nodeType)
-	return s.registry.ExecuteNode(ctx, nodeType, input)
+	// TODO: Implement node execution logic
+	return input, nil
 }

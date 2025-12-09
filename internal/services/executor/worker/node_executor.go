@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os/exec"
 	"time"
 
 	"github.com/linkflow-go/pkg/events"
@@ -186,7 +185,7 @@ func (e *NodeExecutor) executeDatabaseQuery(ctx context.Context, request NodeExe
 func (e *NodeExecutor) executeEmail(ctx context.Context, request NodeExecutionRequest) (*NodeExecutionResult, error) {
 	to, _ := request.Parameters["to"].(string)
 	subject, _ := request.Parameters["subject"].(string)
-	body, _ := request.Parameters["body"].(string)
+	// body, _ := request.Parameters["body"].(string)
 	
 	e.logger.Info("Sending email",
 		"to", to,
@@ -207,7 +206,7 @@ func (e *NodeExecutor) executeEmail(ctx context.Context, request NodeExecutionRe
 
 func (e *NodeExecutor) executeSlack(ctx context.Context, request NodeExecutionRequest) (*NodeExecutionResult, error) {
 	channel, _ := request.Parameters["channel"].(string)
-	message, _ := request.Parameters["message"].(string)
+	// message, _ := request.Parameters["message"].(string)
 	
 	e.logger.Info("Sending Slack message",
 		"channel", channel,
@@ -311,7 +310,7 @@ func (e *NodeExecutor) executeMap(ctx context.Context, request NodeExecutionRequ
 
 func (e *NodeExecutor) executeFilter(ctx context.Context, request NodeExecutionRequest) (*NodeExecutionResult, error) {
 	// Filter logic
-	conditions, _ := request.Parameters["conditions"].([]interface{})
+	// conditions, _ := request.Parameters["conditions"].([]interface{})
 	
 	// Simple filter implementation
 	// In production, this would support complex conditions

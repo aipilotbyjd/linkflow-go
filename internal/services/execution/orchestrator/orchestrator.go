@@ -39,7 +39,7 @@ type ExecutionRepository interface {
 type WorkflowExecutor struct {
 	workflow     *workflow.Workflow
 	execution    *workflow.WorkflowExecution
-	orchestrator *WorkflowOrchestrator
+	orchestrator *Orchestrator
 	context      *ExecutionContext
 	cancelFunc   context.CancelFunc
 }
@@ -52,8 +52,8 @@ type ExecutionContext struct {
 	mu          sync.RWMutex
 }
 
-func NewWorkflowOrchestrator(repo ExecutionRepository, eventBus events.EventBus, redis *redis.Client, logger logger.Logger) *WorkflowOrchestrator {
-	return &WorkflowOrchestrator{
+func NewOrchestrator(repo ExecutionRepository, eventBus events.EventBus, redis *redis.Client, logger logger.Logger) *Orchestrator {
+	return &Orchestrator{
 		repository: repo,
 		eventBus:   eventBus,
 		redis:      redis,
@@ -63,7 +63,7 @@ func NewWorkflowOrchestrator(repo ExecutionRepository, eventBus events.EventBus,
 	}
 }
 
-func (o *WorkflowOrchestrator) Start() {
+func (o *Orchestrator) Start() {
 	o.logger.Info("Starting workflow orchestrator")
 	
 	// Start background workers
@@ -71,7 +71,7 @@ func (o *WorkflowOrchestrator) Start() {
 	go o.cleanupStaleExecutions()
 }
 
-func (o *WorkflowOrchestrator) Stop() {
+func (o *Orchestrator) Stop() {
 	o.logger.Info("Stopping workflow orchestrator")
 	close(o.stopCh)
 	
@@ -83,7 +83,7 @@ func (o *WorkflowOrchestrator) Stop() {
 	o.executorsMux.Unlock()
 }
 
-func (o *WorkflowOrchestrator) ExecuteWorkflow(ctx context.Context, workflowID string, inputData map[string]interface{}) (*workflow.WorkflowExecution, error) {
+func (o *Orchestrator) ExecuteWorkflow(ctx context.Context, workflowID string, inputData map[string]interface{}) (*workflow.WorkflowExecution, error) {
 	// Get workflow
 	wf, err := o.repository.GetWorkflow(ctx, workflowID)
 	if err != nil {
@@ -438,7 +438,7 @@ func (e *WorkflowExecutor) completeExecution(ctx context.Context) {
 	e.orchestrator.eventBus.Publish(ctx, event)
 }
 
-func (o *WorkflowOrchestrator) monitorExecutions() {
+func (o *Orchestrator) monitorExecutions() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	
@@ -452,7 +452,7 @@ func (o *WorkflowOrchestrator) monitorExecutions() {
 	}
 }
 
-func (o *WorkflowOrchestrator) checkExecutionTimeouts() {
+func (o *Orchestrator) checkExecutionTimeouts() {
 	o.executorsMux.RLock()
 	defer o.executorsMux.RUnlock()
 	
@@ -464,7 +464,7 @@ func (o *WorkflowOrchestrator) checkExecutionTimeouts() {
 	}
 }
 
-func (o *WorkflowOrchestrator) cleanupStaleExecutions() {
+func (o *Orchestrator) cleanupStaleExecutions() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	
