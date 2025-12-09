@@ -1,0 +1,230 @@
+version: '3.8'
+
+services:
+  # Infrastructure Services
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: linkflow
+      POSTGRES_PASSWORD: linkflow123
+      POSTGRES_DB: linkflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - linkflow-network
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - linkflow-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    networks:
+      - linkflow-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - linkflow-network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - linkflow-network
+
+  # Monitoring Stack
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    networks:
+      - linkflow-network
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - linkflow-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.52
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # Collector
+      - "4317:4317"    # OTLP gRPC
+    networks:
+      - linkflow-network
+
+  # API Gateway
+  kong:
+    image: kong:3.5-alpine
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+    ports:
+      - "8000:8000"  # Proxy
+      - "8001:8001"  # Admin API
+    volumes:
+      - ./configs/kong.yml:/kong/declarative/kong.yml
+    networks:
+      - linkflow-network
+
+  # Core Services (uncomment when ready)
+  # auth-service:
+  #   build:
+  #     context: .
+  #     dockerfile: deployments/docker/Dockerfile
+  #     args:
+  #       SERVICE_NAME: auth
+  #   environment:
+  #     DB_HOST: postgres
+  #     DB_PORT: 5432
+  #     DB_NAME: linkflow
+  #     DB_USER: linkflow
+  #     DB_PASSWORD: linkflow123
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #     KAFKA_BROKERS: kafka:9092
+  #     SERVICE_PORT: 8001
+  #   ports:
+  #     - "8001:8001"
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #     - kafka
+  #   networks:
+  #     - linkflow-network
+
+  # user-service:
+  #   build:
+  #     context: .
+  #     dockerfile: deployments/docker/Dockerfile
+  #     args:
+  #       SERVICE_NAME: user
+  #   environment:
+  #     DB_HOST: postgres
+  #     DB_PORT: 5432
+  #     DB_NAME: linkflow
+  #     DB_USER: linkflow
+  #     DB_PASSWORD: linkflow123
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #     KAFKA_BROKERS: kafka:9092
+  #     SERVICE_PORT: 8002
+  #   ports:
+  #     - "8002:8002"
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #     - kafka
+  #   networks:
+  #     - linkflow-network
+
+  # workflow-service:
+  #   build:
+  #     context: .
+  #     dockerfile: deployments/docker/Dockerfile
+  #     args:
+  #       SERVICE_NAME: workflow
+  #   environment:
+  #     DB_HOST: postgres
+  #     DB_PORT: 5432
+  #     DB_NAME: linkflow
+  #     DB_USER: linkflow
+  #     DB_PASSWORD: linkflow123
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #     KAFKA_BROKERS: kafka:9092
+  #     SERVICE_PORT: 8003
+  #   ports:
+  #     - "8003:8003"
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #     - kafka
+  #   networks:
+  #     - linkflow-network
+
+  # execution-service:
+  #   build:
+  #     context: .
+  #     dockerfile: deployments/docker/Dockerfile
+  #     args:
+  #       SERVICE_NAME: execution
+  #   environment:
+  #     DB_HOST: postgres
+  #     DB_PORT: 5432
+  #     DB_NAME: linkflow
+  #     DB_USER: linkflow
+  #     DB_PASSWORD: linkflow123
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #     KAFKA_BROKERS: kafka:9092
+  #     SERVICE_PORT: 8004
+  #   ports:
+  #     - "8004:8004"
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #     - kafka
+  #   networks:
+  #     - linkflow-network
+
+networks:
+  linkflow-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  elasticsearch_data:
+  prometheus_data:
+  grafana_data:
