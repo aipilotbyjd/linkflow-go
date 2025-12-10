@@ -12,7 +12,7 @@ import (
 
 type CredentialService struct {
 	repo     *repository.CredentialRepository
-	vault    *vault.Vault
+	vault    *vault.VaultManager
 	eventBus events.EventBus
 	redis    *redis.Client
 	logger   logger.Logger
@@ -20,7 +20,7 @@ type CredentialService struct {
 
 func NewCredentialService(
 	repo *repository.CredentialRepository,
-	vault *vault.Vault,
+	vault *vault.VaultManager,
 	eventBus events.EventBus,
 	redis *redis.Client,
 	logger logger.Logger,

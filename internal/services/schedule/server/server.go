@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/linkflow-go/internal/services/schedule/repository"
 	"github.com/linkflow-go/internal/services/schedule/scheduler"
 	"github.com/linkflow-go/pkg/config"
 	"github.com/linkflow-go/pkg/database"
@@ -52,8 +53,11 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 		return nil, fmt.Errorf("failed to create event bus: %w", err)
 	}
 
+	// Initialize repository
+	schedRepo := repository.NewScheduleRepository(db)
+	
 	// Initialize scheduler
-	cronScheduler := scheduler.NewCronScheduler(db, eventBus, redisClient, log)
+	cronScheduler := scheduler.NewCronScheduler(schedRepo, eventBus, redisClient, log)
 
 	// Setup HTTP server
 	router := setupRouter(log)

@@ -26,7 +26,7 @@ type Server struct {
 	db         *database.DB
 	redis      *redis.Client
 	eventBus   events.EventBus
-	vault      *vault.Vault
+	vault      *vault.VaultManager
 }
 
 func New(cfg *config.Config, log logger.Logger) (*Server, error) {
@@ -56,7 +56,9 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	}
 
 	// Initialize vault
-	credVault, err := vault.NewVault(cfg.Vault.Key, log)
+	// TODO: Add Vault configuration to config.Config
+	// Using a 32-byte key for AES-256
+	credVault, err := vault.NewVaultManager("temporary-32-byte-encryption-key", log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize vault: %w", err)
 	}
@@ -228,10 +230,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		return fmt.Errorf("failed to shutdown HTTP server: %w", err)
 	}
 	
-	// Close vault
-	if err := s.vault.Close(); err != nil {
-		s.logger.Error("Failed to close vault", "error", err)
-	}
+	// VaultManager doesn't need explicit closing
 	
 	// Close event bus
 	if err := s.eventBus.Close(); err != nil {

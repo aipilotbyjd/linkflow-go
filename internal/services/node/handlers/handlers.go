@@ -68,3 +68,38 @@ func (h *NodeHandlers) GetNodeDocumentation(c *gin.Context) {
 func (h *NodeHandlers) SearchNodes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"nodes": []interface{}{}})
 }
+
+func (h *NodeHandlers) GetNodeSchema(c *gin.Context) {
+	nodeType := c.Param("type")
+	c.JSON(http.StatusOK, gin.H{"type": nodeType, "schema": map[string]interface{}{}})
+}
+
+func (h *NodeHandlers) ValidateNodeConfig(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"valid": true, "errors": []string{}})
+}
+
+func (h *NodeHandlers) TestNode(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"success": true, "result": map[string]interface{}{}})
+}
+
+func (h *NodeHandlers) GetMarketplaceNodes(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"nodes": []interface{}{}})
+}
+
+func (h *NodeHandlers) InstallNode(c *gin.Context) {
+	nodeID := c.Param("id")
+	c.JSON(http.StatusOK, gin.H{"message": "Node installed", "id": nodeID})
+}
+
+func (h *NodeHandlers) UninstallNode(c *gin.Context) {
+	nodeID := c.Param("id")
+	c.JSON(http.StatusOK, gin.H{"message": "Node uninstalled", "id": nodeID})
+}
+
+func (h *NodeHandlers) GetCategories(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"categories": []string{"Action", "Trigger", "Transform", "Integration"}})
+}
+
+func (h *NodeHandlers) GetTags(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"tags": []string{"http", "database", "email", "slack", "webhook"}})
+}

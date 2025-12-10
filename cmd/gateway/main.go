@@ -8,10 +8,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/99designs/gqlgen/graphql/handler"
+	// "github.com/99designs/gqlgen/graphql/handler" // Commented until schema is generated
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
-	"github.com/linkflow-go/internal/gateway/graph"
+	// "github.com/linkflow-go/internal/gateway/graph" // Commented until used
 	"github.com/linkflow-go/internal/gateway/graph/generated"
 	"github.com/linkflow-go/internal/gateway/resolver"
 	"github.com/linkflow-go/pkg/config"
@@ -32,16 +32,19 @@ func main() {
 	resolver := resolver.NewResolver(cfg, log)
 
 	// Create GraphQL server
-	srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: resolver}))
+	// TODO: Use gqlgen to generate the proper schema
+	// srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: resolver}))
+	_ = resolver // Suppress unused variable warning
+	_ = generated.Config{} // Reference the type to avoid import issues
 
 	// Setup Gin router
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
 
-	// GraphQL endpoint
-	router.POST("/graphql", graphqlHandler(srv))
-	router.GET("/graphql", graphqlHandler(srv))
+	// GraphQL endpoint - temporarily disabled until schema is generated
+	// router.POST("/graphql", graphqlHandler(srv))
+	// router.GET("/graphql", graphqlHandler(srv))
 
 	// GraphQL playground
 	router.GET("/playground", playgroundHandler())
@@ -83,11 +86,14 @@ func main() {
 	log.Info("GraphQL gateway exited")
 }
 
+// graphqlHandler is temporarily commented out until schema is generated
+/*
 func graphqlHandler(srv *handler.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		srv.ServeHTTP(c.Writer, c.Request)
 	}
 }
+*/
 
 func playgroundHandler() gin.HandlerFunc {
 	h := playground.Handler("GraphQL Playground", "/graphql")

@@ -38,3 +38,9 @@ func (r *NodeRepository) UpdateNodeType(ctx context.Context, nodeType *node.Node
 func (r *NodeRepository) DeleteNodeType(ctx context.Context, nodeType string) error {
 	return r.db.WithContext(ctx).Where("type = ?", nodeType).Delete(&node.NodeType{}).Error
 }
+
+func (r *NodeRepository) GetAllNodeTypes(ctx context.Context) ([]*node.NodeType, error) {
+	var nodes []*node.NodeType
+	err := r.db.WithContext(ctx).Find(&nodes).Error
+	return nodes, err
+}

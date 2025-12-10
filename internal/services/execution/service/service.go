@@ -49,3 +49,33 @@ func (s *ExecutionService) StopExecution(ctx context.Context, executionID string
 	// For now, we'll just log it
 	return nil
 }
+
+func (s *ExecutionService) HandleWorkflowActivated(ctx context.Context, event events.Event) error {
+	s.logger.Info("Handling workflow activated event", "type", event.Type, "id", event.ID)
+	// Handle workflow activation logic
+	return nil
+}
+
+func (s *ExecutionService) HandleWorkflowDeactivated(ctx context.Context, event events.Event) error {
+	s.logger.Info("Handling workflow deactivated event", "type", event.Type, "id", event.ID)
+	// Handle workflow deactivation logic
+	return nil
+}
+
+func (s *ExecutionService) HandleTriggerFired(ctx context.Context, event events.Event) error {
+	s.logger.Info("Handling trigger fired event", "type", event.Type, "id", event.ID)
+	// Handle trigger fired logic
+	return nil
+}
+
+func (s *ExecutionService) HandleWebhookReceived(ctx context.Context, event events.Event) error {
+	s.logger.Info("Handling webhook received event", "type", event.Type, "id", event.ID)
+	// Handle webhook received logic
+	return nil
+}
+
+func (s *ExecutionService) HandleScheduleTriggered(ctx context.Context, event events.Event) error {
+	s.logger.Info("Handling schedule triggered event", "type", event.Type, "id", event.ID)
+	// Handle schedule triggered logic
+	return nil
+}

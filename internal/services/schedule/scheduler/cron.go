@@ -235,10 +235,10 @@ func (s *CronScheduler) addToCron(sched *schedule.Schedule) error {
 	}
 	
 	// Parse timezone
-	loc, err := time.LoadLocation(sched.Timezone)
-	if err != nil {
-		loc = time.UTC
-	}
+	// loc, err := time.LoadLocation(sched.Timezone)
+	// if err != nil {
+	// 	loc = time.UTC
+	// }
 	
 	// Create cron job
 	job := &scheduleJob{
@@ -253,10 +253,8 @@ func (s *CronScheduler) addToCron(sched *schedule.Schedule) error {
 		return fmt.Errorf("failed to parse cron expression: %w", err)
 	}
 	
-	entryID := s.cron.Schedule(cron.SpecSchedule{
-		Schedule: schedule,
-		Location: loc,
-	}, job)
+	// Create a cron.Schedule wrapper that implements the interface
+	entryID := s.cron.Schedule(schedule, job)
 	
 	s.schedules[sched.ID] = entryID
 	

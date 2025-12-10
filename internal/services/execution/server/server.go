@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -60,7 +59,7 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	execRepo := repository.NewExecutionRepository(db)
 
 	// Initialize orchestrator
-	workflowOrchestrator := orchestrator.NewWorkflowOrchestrator(
+	workflowOrchestrator := orchestrator.NewOrchestrator(
 		execRepo, eventBus, redisClient, log,
 	)
 

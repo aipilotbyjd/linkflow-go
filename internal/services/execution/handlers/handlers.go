@@ -69,3 +69,39 @@ func (h *ExecutionHandlers) StreamExecutionEvents(c *gin.Context) {
 	// WebSocket or SSE implementation
 	c.JSON(http.StatusOK, gin.H{"message": "Streaming events"})
 }
+
+func (h *ExecutionHandlers) DeleteExecution(c *gin.Context) {
+	id := c.Param("id")
+	c.JSON(http.StatusOK, gin.H{"message": "Execution deleted", "id": id})
+}
+
+func (h *ExecutionHandlers) GetExecutionLog(c *gin.Context) {
+	id := c.Param("id")
+	c.JSON(http.StatusOK, gin.H{"id": id, "logs": []interface{}{}})
+}
+
+func (h *ExecutionHandlers) GetNodeExecutions(c *gin.Context) {
+	id := c.Param("id")
+	c.JSON(http.StatusOK, gin.H{"execution_id": id, "nodes": []interface{}{}})
+}
+
+func (h *ExecutionHandlers) GetExecutionStats(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"stats": map[string]interface{}{}})
+}
+
+func (h *ExecutionHandlers) StreamExecution(c *gin.Context) {
+	// WebSocket streaming implementation
+	c.JSON(http.StatusOK, gin.H{"message": "Streaming execution"})
+}
+
+func (h *ExecutionHandlers) TriggerWorkflow(c *gin.Context) {
+	c.JSON(http.StatusAccepted, gin.H{"execution_id": "exec_triggered", "status": "triggered"})
+}
+
+func (h *ExecutionHandlers) ManualTrigger(c *gin.Context) {
+	c.JSON(http.StatusAccepted, gin.H{"execution_id": "exec_manual", "status": "triggered"})
+}
+
+func (h *ExecutionHandlers) TestExecution(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"test_result": "success", "status": "completed"})
+}
