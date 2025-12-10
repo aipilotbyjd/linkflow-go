@@ -42,10 +42,11 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:29092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     ports:
-      - "9092:9092"
+      - "29092:29092"
     networks:
       - linkflow-network
     healthcheck:
@@ -137,31 +138,31 @@ services:
     networks:
       - linkflow-network
 
-  # Core Services (uncomment when ready)
-  # auth-service:
-  #   build:
-  #     context: .
-  #     dockerfile: deployments/docker/Dockerfile
-  #     args:
-  #       SERVICE_NAME: auth
-  #   environment:
-  #     DB_HOST: postgres
-  #     DB_PORT: 5432
-  #     DB_NAME: linkflow
-  #     DB_USER: linkflow
-  #     DB_PASSWORD: linkflow123
-  #     REDIS_HOST: redis
-  #     REDIS_PORT: 6379
-  #     KAFKA_BROKERS: kafka:9092
-  #     SERVICE_PORT: 8001
-  #   ports:
-  #     - "8001:8001"
-  #   depends_on:
-  #     - postgres
-  #     - redis
-  #     - kafka
-  #   networks:
-  #     - linkflow-network
+  # Core Services
+  auth-service:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+      args:
+        SERVICE_NAME: auth
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: linkflow
+      DB_USER: linkflow
+      DB_PASSWORD: linkflow123
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BROKERS: kafka:29092
+      SERVICE_PORT: 8001
+    ports:
+      - "8001:8001"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    networks:
+      - linkflow-network
 
   # user-service:
   #   build:
