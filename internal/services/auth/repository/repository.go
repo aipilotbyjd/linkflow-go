@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/linkflow-go/internal/domain/user"
 	"github.com/linkflow-go/pkg/database"
@@ -85,6 +86,35 @@ func (r *AuthRepository) DeleteSession(ctx context.Context, token string) error 
 func (r *AuthRepository) DeleteUserSessions(ctx context.Context, userID string) error {
 	return r.db.WithContext(ctx).
 		Where("user_id = ?", userID).
+		Delete(&user.Session{}).Error
+}
+
+func (r *AuthRepository) GetUserSessions(ctx context.Context, userID string) ([]*user.Session, error) {
+	var sessions []*user.Session
+	err := r.db.WithContext(ctx).
+		Where("user_id = ? AND expires_at > ?", userID, time.Now()).
+		Order("created_at DESC").
+		Find(&sessions).Error
+	
+	return sessions, err
+}
+
+func (r *AuthRepository) GetSessionByID(ctx context.Context, sessionID string) (*user.Session, error) {
+	var session user.Session
+	err := r.db.WithContext(ctx).
+		Where("id = ?", sessionID).
+		First(&session).Error
+	
+	if err == gorm.ErrRecordNotFound {
+		return nil, fmt.Errorf("session not found")
+	}
+	
+	return &session, err
+}
+
+func (r *AuthRepository) DeleteSessionByID(ctx context.Context, sessionID string) error {
+	return r.db.WithContext(ctx).
+		Where("id = ?", sessionID).
 		Delete(&user.Session{}).Error
 }
 

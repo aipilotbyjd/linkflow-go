@@ -711,3 +711,176 @@ func (h *WorkflowHandlers) GetPopularTags(c *gin.Context) {
 	
 	c.JSON(http.StatusOK, gin.H{"tags": tags})
 }
+
+// Trigger handlers
+
+// CreateTrigger creates a new trigger for a workflow
+func (h *WorkflowHandlers) CreateTrigger(c *gin.Context) {
+	workflowID := c.Param("id")
+	userID := c.GetString("user_id")
+	
+	var config map[string]interface{}
+	if err := c.ShouldBindJSON(&config); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	trigger, err := h.service.CreateTrigger(c.Request.Context(), workflowID, userID, config)
+	if err != nil {
+		if err == service.ErrWorkflowNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Workflow not found"})
+			return
+		}
+		h.logger.Error("Failed to create trigger", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create trigger"})
+		return
+	}
+	
+	c.JSON(http.StatusCreated, trigger)
+}
+
+// ListTriggers lists all triggers for a workflow
+func (h *WorkflowHandlers) ListTriggers(c *gin.Context) {
+	workflowID := c.Param("id")
+	userID := c.GetString("user_id")
+	
+	triggers, err := h.service.ListTriggers(c.Request.Context(), workflowID, userID)
+	if err != nil {
+		if err == service.ErrWorkflowNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Workflow not found"})
+			return
+		}
+		h.logger.Error("Failed to list triggers", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list triggers"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"triggers": triggers})
+}
+
+// GetTrigger gets a specific trigger
+func (h *WorkflowHandlers) GetTrigger(c *gin.Context) {
+	triggerID := c.Param("triggerId")
+	userID := c.GetString("user_id")
+	
+	trigger, err := h.service.GetTrigger(c.Request.Context(), triggerID, userID)
+	if err != nil {
+		if err == service.ErrUnauthorized {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized"})
+			return
+		}
+		h.logger.Error("Failed to get trigger", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get trigger"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, trigger)
+}
+
+// UpdateTrigger updates a trigger
+func (h *WorkflowHandlers) UpdateTrigger(c *gin.Context) {
+	triggerID := c.Param("triggerId")
+	userID := c.GetString("user_id")
+	
+	var updates map[string]interface{}
+	if err := c.ShouldBindJSON(&updates); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	trigger, err := h.service.UpdateTrigger(c.Request.Context(), triggerID, userID, updates)
+	if err != nil {
+		if err == service.ErrUnauthorized {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized"})
+			return
+		}
+		h.logger.Error("Failed to update trigger", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update trigger"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, trigger)
+}
+
+// DeleteTrigger deletes a trigger
+func (h *WorkflowHandlers) DeleteTrigger(c *gin.Context) {
+	triggerID := c.Param("triggerId")
+	userID := c.GetString("user_id")
+	
+	if err := h.service.DeleteTrigger(c.Request.Context(), triggerID, userID); err != nil {
+		if err == service.ErrUnauthorized {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized"})
+			return
+		}
+		h.logger.Error("Failed to delete trigger", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete trigger"})
+		return
+	}
+	
+	c.Status(http.StatusNoContent)
+}
+
+// ActivateTrigger activates a trigger
+func (h *WorkflowHandlers) ActivateTrigger(c *gin.Context) {
+	triggerID := c.Param("triggerId")
+	userID := c.GetString("user_id")
+	
+	if err := h.service.ActivateTrigger(c.Request.Context(), triggerID, userID); err != nil {
+		if err == service.ErrUnauthorized {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized"})
+			return
+		}
+		if err == service.ErrWorkflowInactive {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Workflow is not active"})
+			return
+		}
+		h.logger.Error("Failed to activate trigger", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to activate trigger"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"message": "Trigger activated"})
+}
+
+// DeactivateTrigger deactivates a trigger
+func (h *WorkflowHandlers) DeactivateTrigger(c *gin.Context) {
+	triggerID := c.Param("triggerId")
+	userID := c.GetString("user_id")
+	
+	if err := h.service.DeactivateTrigger(c.Request.Context(), triggerID, userID); err != nil {
+		if err == service.ErrUnauthorized {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized"})
+			return
+		}
+		h.logger.Error("Failed to deactivate trigger", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deactivate trigger"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"message": "Trigger deactivated"})
+}
+
+// TestTrigger tests a trigger with sample data
+func (h *WorkflowHandlers) TestTrigger(c *gin.Context) {
+	triggerID := c.Param("triggerId")
+	userID := c.GetString("user_id")
+	
+	var testData map[string]interface{}
+	if err := c.ShouldBindJSON(&testData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	result, err := h.service.TestTrigger(c.Request.Context(), triggerID, userID, testData)
+	if err != nil {
+		if err == service.ErrUnauthorized {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized"})
+			return
+		}
+		h.logger.Error("Failed to test trigger", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to test trigger"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, result)
+}

@@ -1,0 +1,275 @@
+_format_version: "3.0"
+_transform: true
+
+# Kong Declarative Configuration for LinkFlow
+
+services:
+  # Auth Service
+  - name: auth-service
+    url: http://auth-service:8080
+    protocol: http
+    host: auth-service
+    port: 8080
+    retries: 3
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      - name: auth-route
+        paths:
+          - /api/auth
+        strip_path: false
+        preserve_host: true
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 100
+          hour: 1000
+          policy: local
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          headers:
+            - Authorization
+            - Content-Type
+          exposed_headers:
+            - X-Request-Id
+          credentials: true
+          max_age: 3600
+
+  # User Service
+  - name: user-service
+    url: http://user-service:8080
+    protocol: http
+    host: user-service
+    port: 8080
+    retries: 3
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      - name: user-route
+        paths:
+          - /api/users
+        strip_path: false
+        preserve_host: true
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+          run_on_preflight: false
+          claims_to_verify:
+            - exp
+      - name: rate-limiting
+        config:
+          minute: 200
+          policy: local
+
+  # Workflow Service
+  - name: workflow-service
+    url: http://workflow-service:8080
+    protocol: http
+    host: workflow-service
+    port: 8080
+    retries: 3
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      - name: workflow-route
+        paths:
+          - /api/workflows
+        strip_path: false
+        preserve_host: true
+      - name: workflow-ws
+        paths:
+          - /api/workflows/ws
+        protocols:
+          - ws
+          - wss
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+      - name: rate-limiting
+        config:
+          minute: 500
+          policy: local
+      - name: request-size-limiting
+        config:
+          allowed_payload_size: 10
+          size_unit: megabytes
+      - name: prometheus
+
+  # Execution Service
+  - name: execution-service
+    url: http://execution-service:8080
+    protocol: http
+    host: execution-service
+    port: 8080
+    retries: 3
+    connect_timeout: 60000
+    write_timeout: 120000
+    read_timeout: 120000
+    routes:
+      - name: execution-route
+        paths:
+          - /api/executions
+        strip_path: false
+        preserve_host: true
+      - name: execution-stream
+        paths:
+          - /api/executions/stream
+        protocols:
+          - http
+          - https
+        methods:
+          - GET
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+      - name: rate-limiting
+        config:
+          minute: 300
+          policy: local
+      - name: response-transformer
+        config:
+          add:
+            headers:
+              - X-Service-Name:execution-service
+              - X-Service-Version:v1
+
+  # Health Check Route (No Auth)
+  - name: health-service
+    url: http://localhost:8001
+    routes:
+      - name: health-route
+        paths:
+          - /health
+        methods:
+          - GET
+    plugins:
+      - name: request-transformer
+        config:
+          replace:
+            uri: /status
+
+# Global Plugins
+plugins:
+  - name: correlation-id
+    config:
+      header_name: X-Request-Id
+      generator: uuid
+      echo_downstream: true
+
+  - name: request-transformer
+    config:
+      add:
+        headers:
+          - X-Forwarded-Prefix:/api
+
+  - name: bot-detection
+    config:
+      allow:
+        - "(Uptime Robot|Pingdom)"
+
+  - name: ip-restriction
+    config:
+      allow:
+        - 0.0.0.0/0  # Allow all IPs in dev, restrict in production
+      message: "Your IP is not allowed"
+
+  - name: prometheus
+    config:
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+      upstream_health_metrics: true
+
+# Upstreams (for load balancing)
+upstreams:
+  - name: auth-upstream
+    algorithm: round-robin
+    targets:
+      - target: auth-service-1:8080
+        weight: 100
+      - target: auth-service-2:8080
+        weight: 100
+      - target: auth-service-3:8080
+        weight: 100
+    health_checks:
+      active:
+        type: http
+        http_path: /health
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 5
+
+  - name: workflow-upstream
+    algorithm: least-connections
+    targets:
+      - target: workflow-service-1:8080
+        weight: 100
+      - target: workflow-service-2:8080
+        weight: 100
+      - target: workflow-service-3:8080
+        weight: 100
+    health_checks:
+      active:
+        type: http
+        http_path: /health
+        timeout: 5
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+
+# Consumers (API Key Management)
+consumers:
+  - username: internal-services
+    custom_id: internal-001
+    tags:
+      - internal
+      - microservices
+
+  - username: external-api-user
+    custom_id: external-001
+    tags:
+      - external
+      - api
+
+  - username: monitoring-service
+    custom_id: monitoring-001
+    tags:
+      - monitoring
+      - prometheus
+
+# ACLs (Access Control Lists)
+acls:
+  - consumer: internal-services
+    group: internal
+
+  - consumer: external-api-user
+    group: external
+
+  - consumer: monitoring-service
+    group: monitoring

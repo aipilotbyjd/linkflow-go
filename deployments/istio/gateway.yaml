@@ -1,0 +1,44 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: linkflow-gateway
+  namespace: linkflow
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "linkflow.io"
+    - "*.linkflow.io"
+    tls:
+      httpsRedirect: true  # Redirect HTTP to HTTPS
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    hosts:
+    - "linkflow.io"
+    - "*.linkflow.io"
+    tls:
+      mode: SIMPLE
+      credentialName: linkflow-tls-cert
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: linkflow-internal-gateway
+  namespace: linkflow
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 15000
+      name: grpc
+      protocol: GRPC
+    hosts:
+    - "grpc.linkflow.io"

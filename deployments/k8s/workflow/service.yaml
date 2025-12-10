@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: workflow-service
+  namespace: linkflow
+  labels:
+    app: workflow-service
+    app.kubernetes.io/name: workflow-service
+    app.kubernetes.io/component: backend
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: http
+spec:
+  type: ClusterIP
+  selector:
+    app: workflow-service
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  - port: 9000
+    targetPort: 9000
+    protocol: TCP
+    name: grpc
+  - port: 9090
+    targetPort: 9090
+    protocol: TCP
+    name: metrics
+  sessionAffinity: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workflow-service-headless
+  namespace: linkflow
+  labels:
+    app: workflow-service
+spec:
+  clusterIP: None
+  selector:
+    app: workflow-service
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  - port: 9000
+    targetPort: 9000
+    protocol: TCP
+    name: grpc

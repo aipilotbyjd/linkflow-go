@@ -329,6 +329,177 @@ func (h *AuthHandlers) Disable2FA(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "2FA disabled successfully"})
 }
 
+// Session management handlers
+func (h *AuthHandlers) GetSessions(c *gin.Context) {
+	userID := c.GetString("userId")
+	
+	sessions, err := h.service.GetUserSessions(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.Error("Failed to get user sessions", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get sessions"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"sessions": sessions})
+}
+
+func (h *AuthHandlers) RevokeSession(c *gin.Context) {
+	userID := c.GetString("userId")
+	sessionID := c.Param("sessionId")
+	
+	if err := h.service.RevokeSession(c.Request.Context(), userID, sessionID); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
+			return
+		}
+		if strings.Contains(err.Error(), "unauthorized") {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Cannot revoke this session"})
+			return
+		}
+		h.logger.Error("Failed to revoke session", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke session"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"message": "Session revoked successfully"})
+}
+
+func (h *AuthHandlers) RevokeAllSessions(c *gin.Context) {
+	userID := c.GetString("userId")
+	
+	if err := h.service.RevokeAllSessions(c.Request.Context(), userID); err != nil {
+		h.logger.Error("Failed to revoke all sessions", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke sessions"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"message": "All sessions revoked successfully"})
+}
+
+func (h *AuthHandlers) ValidateToken(c *gin.Context) {
+	token := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
+	if token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Token required"})
+		return
+	}
+	
+	session, err := h.service.ValidateSession(c.Request.Context(), token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"valid": true,
+		"session": session,
+	})
+}
+
+// RBAC handlers
+func (h *AuthHandlers) AssignRole(c *gin.Context) {
+	userID := c.Param("userId")
+	
+	var req struct {
+		Role string `json:"role" binding:"required"`
+	}
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	if err := h.service.AssignRole(c.Request.Context(), userID, req.Role); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+		h.logger.Error("Failed to assign role", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign role"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"message": "Role assigned successfully"})
+}
+
+func (h *AuthHandlers) RemoveRole(c *gin.Context) {
+	userID := c.Param("userId")
+	role := c.Param("role")
+	
+	if err := h.service.RemoveRole(c.Request.Context(), userID, role); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+		h.logger.Error("Failed to remove role", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove role"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"message": "Role removed successfully"})
+}
+
+func (h *AuthHandlers) GetUserRoles(c *gin.Context) {
+	userID := c.Param("userId")
+	
+	roles, err := h.service.GetUserRoles(c.Request.Context(), userID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+		h.logger.Error("Failed to get user roles", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user roles"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"roles": roles})
+}
+
+func (h *AuthHandlers) GetAllRoles(c *gin.Context) {
+	roles := h.service.GetAllRoles(c.Request.Context())
+	c.JSON(http.StatusOK, gin.H{"roles": roles})
+}
+
+func (h *AuthHandlers) GetUsersForRole(c *gin.Context) {
+	role := c.Param("role")
+	
+	users, err := h.service.GetUsersForRole(c.Request.Context(), role)
+	if err != nil {
+		h.logger.Error("Failed to get users for role", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get users"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"users": users})
+}
+
+func (h *AuthHandlers) CheckPermission(c *gin.Context) {
+	var req struct {
+		UserID   string `json:"userId" binding:"required"`
+		Resource string `json:"resource" binding:"required"`
+		Action   string `json:"action" binding:"required"`
+	}
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	allowed, err := h.service.CheckPermission(c.Request.Context(), req.UserID, req.Resource, req.Action)
+	if err != nil {
+		h.logger.Error("Failed to check permission", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check permission"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"allowed": allowed,
+		"userId": req.UserID,
+		"resource": req.Resource,
+		"action": req.Action,
+	})
+}
+
 // Health check handlers
 func (h *AuthHandlers) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{

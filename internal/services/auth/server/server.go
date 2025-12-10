@@ -10,12 +10,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/linkflow-go/internal/services/auth/handlers"
 	"github.com/linkflow-go/internal/services/auth/jwt"
+	"github.com/linkflow-go/internal/services/auth/rbac"
 	"github.com/linkflow-go/internal/services/auth/repository"
 	"github.com/linkflow-go/internal/services/auth/service"
 	"github.com/linkflow-go/pkg/config"
 	"github.com/linkflow-go/pkg/database"
 	"github.com/linkflow-go/pkg/events"
 	"github.com/linkflow-go/pkg/logger"
+	"github.com/linkflow-go/pkg/middleware/ratelimit"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 )
@@ -61,17 +63,23 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 		return nil, fmt.Errorf("failed to create JWT manager: %w", err)
 	}
 
+	// Initialize RBAC enforcer
+	rbacEnforcer, err := rbac.NewEnforcer(db, "configs/rbac_model.conf", "configs/rbac_policy.csv", log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RBAC enforcer: %w", err)
+	}
+
 	// Initialize repository
 	authRepo := repository.NewAuthRepository(db)
 
 	// Initialize service
-	authService := service.NewAuthService(authRepo, jwtManager, redisClient, eventBus, log)
+	authService := service.NewAuthService(authRepo, jwtManager, redisClient, eventBus, rbacEnforcer, log)
 
 	// Initialize handlers
 	authHandlers := handlers.NewAuthHandlers(authService, log)
 
 	// Setup HTTP server
-	router := setupRouter(authHandlers, jwtManager, log)
+	router := setupRouter(authHandlers, jwtManager, redisClient, log)
 	
 	httpServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
@@ -88,7 +96,7 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	}, nil
 }
 
-func setupRouter(h *handlers.AuthHandlers, jwtManager *jwt.Manager, log logger.Logger) *gin.Engine {
+func setupRouter(h *handlers.AuthHandlers, jwtManager *jwt.Manager, redisClient *redis.Client, log logger.Logger) *gin.Engine {
 	router := gin.New()
 	
 	// Middleware
@@ -101,12 +109,21 @@ func setupRouter(h *handlers.AuthHandlers, jwtManager *jwt.Manager, log logger.L
 	router.GET("/ready", h.Ready)
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	
+	// Create rate limiter for login attempts
+	// Allow 5 attempts per 15 minutes, then block for 15 minutes
+	var loginRateLimiter ratelimit.RateLimiter
+	if redisClient != nil {
+		loginRateLimiter = ratelimit.NewRedisRateLimiter(redisClient, 5, 15*time.Minute)
+	} else {
+		loginRateLimiter = ratelimit.NewInMemoryRateLimiter(5, 15*time.Minute)
+	}
+	
 	// API routes
 	v1 := router.Group("/api/v1/auth")
 	{
 		// Public routes
 		v1.POST("/register", h.Register)
-		v1.POST("/login", h.Login)
+		v1.POST("/login", ratelimit.LoginRateLimitMiddleware(loginRateLimiter), h.Login)
 		v1.POST("/refresh", h.RefreshToken)
 		v1.POST("/verify-email", h.VerifyEmail)
 		v1.POST("/forgot-password", h.ForgotPassword)
@@ -127,6 +144,24 @@ func setupRouter(h *handlers.AuthHandlers, jwtManager *jwt.Manager, log logger.L
 			protected.POST("/2fa/setup", h.Setup2FA)
 			protected.POST("/2fa/verify", h.Verify2FA)
 			protected.DELETE("/2fa", h.Disable2FA)
+			
+			// Session management endpoints
+			protected.GET("/sessions", h.GetSessions)
+			protected.DELETE("/sessions/:sessionId", h.RevokeSession)
+			protected.DELETE("/sessions", h.RevokeAllSessions)
+			protected.POST("/validate", h.ValidateToken)
+			
+			// RBAC endpoints (admin only)
+			rbac := protected.Group("/rbac")
+			rbac.Use(RequireRole("admin", "super_admin"))
+			{
+				rbac.POST("/users/:userId/roles", h.AssignRole)
+				rbac.DELETE("/users/:userId/roles/:role", h.RemoveRole)
+				rbac.GET("/users/:userId/roles", h.GetUserRoles)
+				rbac.GET("/roles", h.GetAllRoles)
+				rbac.GET("/roles/:role/users", h.GetUsersForRole)
+				rbac.POST("/check-permission", h.CheckPermission)
+			}
 		}
 	}
 	
@@ -247,6 +282,47 @@ func authMiddleware(jwtManager *jwt.Manager) gin.HandlerFunc {
 		c.Set("roles", claims.Roles)
 		c.Set("permissions", claims.Permissions)
 
+		c.Next()
+	}
+}
+
+// RequireRole middleware checks if user has any of the required roles
+func RequireRole(roles ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userRoles, exists := c.Get("roles")
+		if !exists {
+			c.JSON(http.StatusForbidden, gin.H{"error": "no roles found"})
+			c.Abort()
+			return
+		}
+		
+		userRolesList, ok := userRoles.([]string)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid roles format"})
+			c.Abort()
+			return
+		}
+		
+		// Check if user has any of the required roles
+		hasRole := false
+		for _, requiredRole := range roles {
+			for _, userRole := range userRolesList {
+				if userRole == requiredRole {
+					hasRole = true
+					break
+				}
+			}
+			if hasRole {
+				break
+			}
+		}
+		
+		if !hasRole {
+			c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions", "required": roles})
+			c.Abort()
+			return
+		}
+		
 		c.Next()
 	}
 }

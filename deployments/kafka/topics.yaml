@@ -1,0 +1,263 @@
+# Kafka Topics Configuration for LinkFlow
+# This file defines all Kafka topics used in the LinkFlow platform
+
+topics:
+  # Workflow Management Topics
+  - name: workflow.events
+    partitions: 10
+    replication-factor: 3
+    config:
+      retention.ms: 604800000  # 7 days
+      compression.type: snappy
+      cleanup.policy: delete
+      segment.ms: 86400000  # 1 day
+      min.insync.replicas: 2
+    description: "All workflow lifecycle events (created, updated, deleted, published)"
+
+  - name: workflow.triggers
+    partitions: 5
+    replication-factor: 3
+    config:
+      retention.ms: 172800000  # 2 days
+      compression.type: snappy
+      cleanup.policy: delete
+    description: "Workflow trigger events from various sources"
+
+  # Execution Management Topics
+  - name: execution.events
+    partitions: 20
+    replication-factor: 3
+    config:
+      retention.ms: 259200000  # 3 days
+      compression.type: snappy
+      cleanup.policy: delete
+      segment.ms: 43200000  # 12 hours
+      min.insync.replicas: 2
+    description: "Execution lifecycle events and state changes"
+
+  - name: execution.commands
+    partitions: 15
+    replication-factor: 3
+    config:
+      retention.ms: 86400000  # 1 day
+      compression.type: snappy
+      cleanup.policy: delete
+    description: "Commands for execution control (start, stop, pause, resume)"
+
+  - name: execution.results
+    partitions: 20
+    replication-factor: 3
+    config:
+      retention.ms: 432000000  # 5 days
+      compression.type: gzip
+      cleanup.policy: delete
+      max.message.bytes: 10485760  # 10MB for large results
+    description: "Execution results and output data"
+
+  # Analytics & Metrics Topics
+  - name: analytics.events
+    partitions: 15
+    replication-factor: 3
+    config:
+      retention.ms: 2592000000  # 30 days
+      compression.type: snappy
+      cleanup.policy: delete
+      segment.ms: 86400000  # 1 day
+    description: "Analytics and usage events"
+
+  - name: metrics.events
+    partitions: 20
+    replication-factor: 3
+    config:
+      retention.ms: 86400000  # 1 day
+      compression.type: snappy
+      cleanup.policy: delete
+      segment.ms: 3600000  # 1 hour
+    description: "System and application metrics"
+
+  # Audit & Compliance Topics
+  - name: audit.log
+    partitions: 5
+    replication-factor: 3
+    config:
+      retention.ms: 2592000000  # 30 days
+      compression.type: gzip
+      cleanup.policy: delete
+      min.insync.replicas: 2
+      unclean.leader.election.enable: false
+    description: "Audit trail for compliance and security"
+
+  - name: security.events
+    partitions: 5
+    replication-factor: 3
+    config:
+      retention.ms: 1209600000  # 14 days
+      compression.type: gzip
+      cleanup.policy: delete
+      min.insync.replicas: 2
+    description: "Security-related events (login, access, permissions)"
+
+  # Notification & Communication Topics
+  - name: notification.events
+    partitions: 10
+    replication-factor: 3
+    config:
+      retention.ms: 172800000  # 2 days
+      compression.type: snappy
+      cleanup.policy: delete
+    description: "Notification events for various channels"
+
+  - name: webhook.events
+    partitions: 10
+    replication-factor: 3
+    config:
+      retention.ms: 259200000  # 3 days
+      compression.type: snappy
+      cleanup.policy: delete
+      retry.backoff.ms: 1000
+    description: "Incoming webhook events"
+
+  - name: email.queue
+    partitions: 5
+    replication-factor: 3
+    config:
+      retention.ms: 86400000  # 1 day
+      compression.type: snappy
+      cleanup.policy: delete
+    description: "Email notification queue"
+
+  # Schedule & Cron Topics
+  - name: schedule.triggers
+    partitions: 5
+    replication-factor: 3
+    config:
+      retention.ms: 86400000  # 1 day
+      compression.type: snappy
+      cleanup.policy: compact,delete
+      segment.ms: 3600000  # 1 hour
+    description: "Scheduled workflow triggers"
+
+  # State Management Topics
+  - name: state.changes
+    partitions: 15
+    replication-factor: 3
+    config:
+      retention.ms: 432000000  # 5 days
+      compression.type: snappy
+      cleanup.policy: compact
+      min.cleanable.dirty.ratio: 0.1
+      segment.ms: 21600000  # 6 hours
+    description: "State change events for state machines"
+
+  - name: state.snapshots
+    partitions: 10
+    replication-factor: 3
+    config:
+      retention.ms: 604800000  # 7 days
+      compression.type: gzip
+      cleanup.policy: compact
+      max.message.bytes: 52428800  # 50MB for large state snapshots
+    description: "Periodic state snapshots"
+
+  # Error Handling Topics
+  - name: dlq.events
+    partitions: 5
+    replication-factor: 3
+    config:
+      retention.ms: 1209600000  # 14 days
+      compression.type: gzip
+      cleanup.policy: delete
+      min.insync.replicas: 2
+    description: "Dead letter queue for failed message processing"
+
+  - name: retry.events
+    partitions: 10
+    replication-factor: 3
+    config:
+      retention.ms: 259200000  # 3 days
+      compression.type: snappy
+      cleanup.policy: delete
+    description: "Events scheduled for retry"
+
+  # Integration Topics
+  - name: integration.requests
+    partitions: 10
+    replication-factor: 3
+    config:
+      retention.ms: 172800000  # 2 days
+      compression.type: snappy
+      cleanup.policy: delete
+    description: "External integration requests"
+
+  - name: integration.responses
+    partitions: 10
+    replication-factor: 3
+    config:
+      retention.ms: 172800000  # 2 days
+      compression.type: snappy
+      cleanup.policy: delete
+    description: "External integration responses"
+
+# Consumer Groups Configuration
+consumer-groups:
+  - name: linkflow-workflow-processor
+    topics:
+      - workflow.events
+      - workflow.triggers
+    config:
+      session.timeout.ms: 30000
+      heartbeat.interval.ms: 3000
+
+  - name: linkflow-execution-processor
+    topics:
+      - execution.events
+      - execution.commands
+    config:
+      session.timeout.ms: 30000
+      heartbeat.interval.ms: 3000
+      max.poll.records: 100
+
+  - name: linkflow-analytics-processor
+    topics:
+      - analytics.events
+      - metrics.events
+    config:
+      session.timeout.ms: 60000
+      heartbeat.interval.ms: 3000
+
+  - name: linkflow-notification-processor
+    topics:
+      - notification.events
+      - email.queue
+    config:
+      session.timeout.ms: 30000
+      heartbeat.interval.ms: 3000
+
+  - name: linkflow-audit-processor
+    topics:
+      - audit.log
+      - security.events
+    config:
+      session.timeout.ms: 30000
+      heartbeat.interval.ms: 3000
+      enable.auto.commit: false  # Manual commit for audit trails
+
+# Kafka Connect Configurations
+connectors:
+  - name: postgres-source-connector
+    class: io.confluent.connect.jdbc.JdbcSourceConnector
+    config:
+      connection.url: "jdbc:postgresql://postgres:5432/linkflow"
+      connection.user: linkflow
+      mode: timestamp+incrementing
+      timestamp.column.name: updated_at
+      incrementing.column.name: id
+      topic.prefix: db.
+
+  - name: elasticsearch-sink-connector
+    class: io.confluent.connect.elasticsearch.ElasticsearchSinkConnector
+    config:
+      connection.url: "http://elasticsearch:9200"
+      topics: audit.log,analytics.events,metrics.events
+      key.ignore: true
+      schema.ignore: true

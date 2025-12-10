@@ -41,15 +41,25 @@ type WorkflowExecutor struct {
 	execution    *workflow.WorkflowExecution
 	orchestrator *Orchestrator
 	context      *ExecutionContext
+	stateMachine *ExecutionStateMachine
 	cancelFunc   context.CancelFunc
 }
 
 type ExecutionContext struct {
-	Data        map[string]interface{}
-	Variables   map[string]interface{}
-	Credentials map[string]interface{}
-	Errors      []string
+	ExecutionID string                    `json:"execution_id"`
+	Variables   map[string]interface{}    `json:"variables"`
+	NodeOutputs map[string]interface{}    `json:"node_outputs"`
+	Errors      []ExecutionErrorDetail    `json:"errors"`
+	StartTime   time.Time                 `json:"start_time"`
+	Metadata    map[string]string         `json:"metadata"`
 	mu          sync.RWMutex
+}
+
+type ExecutionErrorDetail struct {
+	NodeID    string    `json:"node_id"`
+	Error     string    `json:"error"`
+	Timestamp time.Time `json:"timestamp"`
+	Retryable bool      `json:"retryable"`
 }
 
 func NewOrchestrator(repo ExecutionRepository, eventBus events.EventBus, redis *redis.Client, logger logger.Logger) *Orchestrator {
@@ -122,19 +132,34 @@ func (o *Orchestrator) ExecuteWorkflow(ctx context.Context, workflowID string, i
 		o.logger.Error("Failed to publish execution started event", "error", err)
 	}
 	
+	// Create execution context
+	execContext := &ExecutionContext{
+		ExecutionID: execution.ID,
+		Variables:   inputData,
+		NodeOutputs: make(map[string]interface{}),
+		Errors:      []ExecutionErrorDetail{},
+		StartTime:   time.Now(),
+		Metadata:    make(map[string]string),
+	}
+	
+	// Create state machine
+	stateMachine := NewExecutionStateMachine(
+		execution.ID,
+		workflowID,
+		execContext,
+		o.eventBus,
+		o.logger,
+	)
+	
 	// Create executor
 	execCtx, cancel := context.WithTimeout(ctx, time.Duration(wf.Settings.Timeout)*time.Second)
 	executor := &WorkflowExecutor{
 		workflow:     wf,
 		execution:    execution,
 		orchestrator: o,
-		context: &ExecutionContext{
-			Data:        inputData,
-			Variables:   make(map[string]interface{}),
-			Credentials: make(map[string]interface{}),
-			Errors:      []string{},
-		},
-		cancelFunc: cancel,
+		context:      execContext,
+		stateMachine: stateMachine,
+		cancelFunc:   cancel,
 	}
 	
 	// Store executor
@@ -158,6 +183,13 @@ func (e *WorkflowExecutor) Execute(ctx context.Context) {
 		// Cancel context
 		e.cancelFunc()
 	}()
+	
+	// Transition to running state
+	if err := e.stateMachine.Transition(ctx, EventStart, nil); err != nil {
+		e.orchestrator.logger.Error("Failed to transition to running state", "error", err)
+		e.handleExecutionError(ctx, err)
+		return
+	}
 	
 	// Execute workflow nodes
 	if err := e.executeNodes(ctx); err != nil {
@@ -199,7 +231,12 @@ func (e *WorkflowExecutor) executeNodes(ctx context.Context) error {
 		if err := e.executeNode(ctx, nodeID); err != nil {
 			if e.workflow.Settings.ErrorHandling.ContinueOnFail {
 				e.context.mu.Lock()
-				e.context.Errors = append(e.context.Errors, err.Error())
+				e.context.Errors = append(e.context.Errors, ExecutionErrorDetail{
+					NodeID:    nodeID,
+					Error:     err.Error(),
+					Timestamp: time.Now(),
+					Retryable: false,
+				})
 				e.context.mu.Unlock()
 			} else {
 				return err
@@ -243,9 +280,9 @@ func (e *WorkflowExecutor) executeNode(ctx context.Context, nodeID string) error
 		ID:          uuid.New().String(),
 		ExecutionID: e.execution.ID,
 		NodeID:      nodeID,
-		Status:      workflow.ExecutionRunning,
+		Status:      string(workflow.NodeExecutionRunning),
 		StartedAt:   time.Now(),
-		InputData:   e.context.Data,
+		InputData:   e.context.Variables,
 	}
 	
 	if err := e.orchestrator.repository.CreateNodeExecution(ctx, nodeExec); err != nil {
@@ -271,7 +308,7 @@ func (e *WorkflowExecutor) executeNode(ctx context.Context, nodeID string) error
 	nodeExec.FinishedAt = &finishedAt
 	
 	if err != nil {
-		nodeExec.Status = workflow.ExecutionFailed
+		nodeExec.Status = string(workflow.NodeExecutionFailed)
 		nodeExec.Error = err.Error()
 		
 		// Retry if configured
@@ -281,12 +318,18 @@ func (e *WorkflowExecutor) executeNode(ctx context.Context, nodeID string) error
 			return e.executeNode(ctx, nodeID)
 		}
 	} else {
-		nodeExec.Status = workflow.ExecutionCompleted
+		nodeExec.Status = string(workflow.NodeExecutionCompleted)
 		nodeExec.OutputData = outputData
 		
 		// Update execution context with output data
 		e.context.mu.Lock()
-		e.context.Data = outputData
+		e.context.NodeOutputs[nodeID] = outputData
+		// Merge output into variables for next nodes
+		if outputData != nil {
+			for k, v := range outputData {
+				e.context.Variables[k] = v
+			}
+		}
 		e.context.mu.Unlock()
 	}
 	
@@ -325,7 +368,7 @@ func (e *WorkflowExecutor) executeNodeByType(ctx context.Context, node *workflow
 func (e *WorkflowExecutor) executeTriggerNode(ctx context.Context, node *workflow.Node) (map[string]interface{}, error) {
 	// Trigger nodes just pass through the input data
 	e.context.mu.RLock()
-	data := e.context.Data
+	data := e.context.Variables
 	e.context.mu.RUnlock()
 	return data, nil
 }
@@ -349,22 +392,32 @@ func (e *WorkflowExecutor) executeCodeNode(ctx context.Context, node *workflow.N
 
 func (e *WorkflowExecutor) executeConditionNode(ctx context.Context, node *workflow.Node) (map[string]interface{}, error) {
 	// Evaluate condition and determine next path
-	return e.context.Data, nil
+	e.context.mu.RLock()
+	data := e.context.Variables
+	e.context.mu.RUnlock()
+	return data, nil
 }
 
 func (e *WorkflowExecutor) executeLoopNode(ctx context.Context, node *workflow.Node) (map[string]interface{}, error) {
 	// Execute loop logic
-	return e.context.Data, nil
+	e.context.mu.RLock()
+	data := e.context.Variables
+	e.context.mu.RUnlock()
+	return data, nil
 }
 
 func (e *WorkflowExecutor) sendToExecutorService(ctx context.Context, node *workflow.Node) (map[string]interface{}, error) {
 	// Send node to executor service via event bus
+	e.context.mu.RLock()
+	inputData := e.context.Variables
+	e.context.mu.RUnlock()
+	
 	event := events.NewEventBuilder("node.execute.request").
 		WithAggregateID(e.execution.ID).
 		WithPayload("nodeId", node.ID).
 		WithPayload("nodeType", node.Type).
 		WithPayload("parameters", node.Parameters).
-		WithPayload("inputData", e.context.Data).
+		WithPayload("inputData", inputData).
 		Build()
 	
 	if err := e.orchestrator.eventBus.Publish(ctx, event); err != nil {
@@ -374,7 +427,7 @@ func (e *WorkflowExecutor) sendToExecutorService(ctx context.Context, node *work
 	// Wait for response (simplified - in production would use proper async handling)
 	time.Sleep(100 * time.Millisecond)
 	
-	return e.context.Data, nil
+	return inputData, nil
 }
 
 func (e *WorkflowExecutor) buildExecutionGraph() map[string][]string {
@@ -396,7 +449,17 @@ func (e *WorkflowExecutor) findStartNodes(graph map[string][]string) []string {
 }
 
 func (e *WorkflowExecutor) handleExecutionError(ctx context.Context, err error) {
-	e.execution.Status = workflow.ExecutionFailed
+	// Transition to failed state
+	metadata := map[string]interface{}{
+		"error": err.Error(),
+		"timestamp": time.Now(),
+	}
+	
+	if transErr := e.stateMachine.Transition(ctx, EventFail, metadata); transErr != nil {
+		e.orchestrator.logger.Error("Failed to transition to failed state", "error", transErr)
+	}
+	
+	e.execution.Status = string(workflow.ExecutionFailed)
 	e.execution.Error = err.Error()
 	finishedAt := time.Now()
 	e.execution.FinishedAt = &finishedAt
@@ -415,14 +478,19 @@ func (e *WorkflowExecutor) handleExecutionError(ctx context.Context, err error) 
 }
 
 func (e *WorkflowExecutor) completeExecution(ctx context.Context) {
-	e.execution.Status = workflow.ExecutionCompleted
+	// Transition to success state
+	if err := e.stateMachine.Transition(ctx, EventComplete, nil); err != nil {
+		e.orchestrator.logger.Error("Failed to transition to success state", "error", err)
+	}
+	
+	e.execution.Status = string(workflow.ExecutionCompleted)
 	finishedAt := time.Now()
 	e.execution.FinishedAt = &finishedAt
 	e.execution.ExecutionTime = int64(finishedAt.Sub(e.execution.StartedAt).Milliseconds())
 	
 	// Store final data
 	e.context.mu.RLock()
-	e.execution.Data = e.context.Data
+	e.execution.Data = e.context.Variables
 	e.context.mu.RUnlock()
 	
 	e.orchestrator.repository.Update(ctx, e.execution)

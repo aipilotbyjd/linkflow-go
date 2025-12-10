@@ -1,0 +1,98 @@
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: default-metrics
+  namespace: linkflow
+spec:
+  metrics:
+  - providers:
+    - name: prometheus
+    dimensions:
+      request_protocol: request.protocol | "unknown"
+      response_code: response.code | 200
+      source_workload: source.workload.name | "unknown"
+      destination_service: destination.service.name | "unknown"
+  - overrides:
+    - match:
+        metric: REQUEST_COUNT
+      tagOverrides:
+        method:
+          value: request.method
+        path:
+          value: request.path
+    - match:
+        metric: REQUEST_DURATION
+      tagOverrides:
+        method:
+          value: request.method
+---
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: access-logging
+  namespace: linkflow
+spec:
+  accessLogging:
+  - providers:
+    - name: file-accesslog
+    filter:
+      expression: 'response.code >= 400'
+---
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: tracing
+  namespace: linkflow
+spec:
+  tracing:
+  - providers:
+    - name: jaeger
+    randomSamplingPercentage: 1.0  # 1% sampling in production
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: istio-custom-metrics
+  namespace: linkflow
+data:
+  custom_metrics.yaml: |
+    telemetry:
+      v2:
+        prometheus:
+          configOverride:
+            metric:
+              dimensions:
+                source_workload:
+                  value: |
+                    source.workload.name
+                destination_service_name:
+                  value: |
+                    destination.service.name
+                destination_service_namespace:
+                  value: |
+                    destination.service.namespace
+                request_protocol:
+                  value: |
+                    request.protocol
+                response_code:
+                  value: |
+                    response.code | 200
+                method:
+                  value: |
+                    request.method
+                path:
+                  value: |
+                    request.path
+            # Custom metrics
+            custom_metrics:
+              workflow_executions_total:
+                dimensions:
+                  workflow_id: request.headers["x-workflow-id"]
+                  status: response.headers["x-execution-status"]
+                unit: REQUEST
+                value: "1"
+              execution_duration_seconds:
+                dimensions:
+                  workflow_id: request.headers["x-workflow-id"]
+                unit: MILLISECONDS
+                value: response.duration

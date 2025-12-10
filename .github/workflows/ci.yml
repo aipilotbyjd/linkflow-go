@@ -1,37 +1,62 @@
-name: CI/CD Pipeline
+name: CI Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, master, develop, 'release/**']
   pull_request:
-    branches: [ main ]
+    branches: [main, master, develop]
+  workflow_dispatch:
 
 env:
   GO_VERSION: '1.21'
-  DOCKER_REGISTRY: linkflow
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
 
 jobs:
   lint:
     name: Lint Code
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version: ${{ env.GO_VERSION }}
-    
-    - name: Install golangci-lint
+        cache: true
+
+    - name: Install dependencies
       run: |
-        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
-    
+        go mod download
+        go mod verify
+
     - name: Run golangci-lint
-      run: golangci-lint run ./...
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        args: --timeout=5m --config=.golangci.yml
+        skip-pkg-cache: true
+        skip-build-cache: true
+
+    - name: Check go mod tidy
+      run: |
+        go mod tidy
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "go mod tidy produced changes"
+          git diff
+          exit 1
+        fi
 
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      matrix:
+        service: [auth, user, workflow, execution]
     services:
       postgres:
         image: postgres:15-alpine
@@ -46,7 +71,7 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-      
+
       redis:
         image: redis:7-alpine
         options: >-
@@ -56,35 +81,109 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
-    
+
     steps:
-    - uses: actions/checkout@v3
-    
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version: ${{ env.GO_VERSION }}
-    
-    - name: Get dependencies
-      run: go mod download
-    
+        cache: true
+
+    - name: Install test dependencies
+      run: |
+        go install github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+        go install gotest.tools/gotestsum@latest
+
+    - name: Run database migrations
+      env:
+        DATABASE_URL: postgres://linkflow:linkflow123@localhost:5432/linkflow_test?sslmode=disable
+      run: |
+        migrate -path deployments/migrations -database "$DATABASE_URL" up
+
     - name: Run unit tests
-      run: go test -v -race -coverprofile=coverage.out ./...
       env:
         DB_HOST: localhost
         DB_PORT: 5432
+        DB_NAME: linkflow_test
         DB_USER: linkflow
         DB_PASSWORD: linkflow123
-        DB_NAME: linkflow_test
         REDIS_HOST: localhost
         REDIS_PORT: 6379
-    
-    - name: Upload coverage to Codecov
+        GO_ENV: test
+      run: |
+        gotestsum --format testname -- \
+          -v -race -coverprofile=coverage.out -covermode=atomic \
+          ./internal/services/${{ matrix.service }}/...
+
+    - name: Run integration tests
+      if: success()
+      env:
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DB_NAME: linkflow_test
+        DB_USER: linkflow
+        DB_PASSWORD: linkflow123
+        REDIS_HOST: localhost
+        REDIS_PORT: 6379
+        GO_ENV: test
+      run: |
+        gotestsum --format testname -- \
+          -v -race -tags=integration \
+          ./tests/integration/${{ matrix.service }}/...
+
+    - name: Upload coverage
       uses: codecov/codecov-action@v3
       with:
         file: ./coverage.out
-        flags: unittests
-        name: codecov-umbrella
+        flags: ${{ matrix.service }}
+        name: ${{ matrix.service }}-coverage
+        fail_ci_if_error: false
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Run gosec security scanner
+      uses: securego/gosec@master
+      with:
+        args: '-fmt sarif -out gosec-results.sarif ./...'
+
+    - name: Upload SARIF file
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: gosec-results.sarif
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+    - name: Check for dependency vulnerabilities
+      run: |
+        go list -json -m all | nancy sleuth
 
   build:
     name: Build Services
@@ -92,89 +191,186 @@ jobs:
     needs: [lint, test]
     strategy:
       matrix:
-        service: [auth, user, workflow, execution, executor]
-    
+        service: [auth, user, workflow, execution]
     steps:
-    - uses: actions/checkout@v3
-    
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version: ${{ env.GO_VERSION }}
-    
+        cache: true
+
     - name: Build service
       run: |
-        CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
-          -ldflags="-s -w" \
-          -o bin/${{ matrix.service }}-service \
-          cmd/services/${{ matrix.service }}/main.go
-    
+        CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+          -ldflags="-w -s -X main.Version=${{ github.sha }} -X main.BuildTime=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+          -o bin/${{ matrix.service }} \
+          ./cmd/services/${{ matrix.service }}
+
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: ${{ matrix.service }}-service
-        path: bin/${{ matrix.service }}-service
+        name: ${{ matrix.service }}-binary
+        path: bin/${{ matrix.service }}
 
   docker:
-    name: Build and Push Docker Images
+    name: Build Docker Images
     runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build, security]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
-        service: [auth, user, workflow, execution, executor]
-    
+        service: [auth, user, workflow, execution]
     steps:
-    - uses: actions/checkout@v3
-    
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
-    
+      uses: docker/setup-buildx-action@v3
+
     - name: Log in to Docker Hub
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
-    
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: linkflow/${{ matrix.service }}-service
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+
     - name: Build and push Docker image
-      uses: docker/build-push-action@v4
+      uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./deployments/docker/Dockerfile
+        file: deployments/docker/Dockerfile
+        platforms: linux/amd64,linux/arm64
         push: true
-        tags: |
-          ${{ env.DOCKER_REGISTRY }}/${{ matrix.service }}-service:latest
-          ${{ env.DOCKER_REGISTRY }}/${{ matrix.service }}-service:${{ github.sha }}
-        build-args: |
-          SERVICE_NAME=${{ matrix.service }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+        build-args: |
+          SERVICE_NAME=${{ matrix.service }}
+          VERSION=${{ github.sha }}
+          BUILD_TIME=${{ github.event.head_commit.timestamp }}
 
-  deploy:
-    name: Deploy to Kubernetes
+  e2e-tests:
+    name: E2E Tests
     runs-on: ubuntu-latest
     needs: docker
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: linkflow
+          POSTGRES_PASSWORD: linkflow123
+          POSTGRES_DB: linkflow_e2e
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+        ports:
+          - 6379:6379
+
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up kubectl
-      uses: azure/setup-kubectl@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
       with:
-        version: 'v1.28.0'
-    
-    - name: Configure kubectl
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Start services with docker-compose
       run: |
-        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig
-        export KUBECONFIG=$(pwd)/kubeconfig
-    
-    - name: Deploy to Kubernetes
+        docker-compose up -d
+        sleep 30  # Wait for services to be ready
+
+    - name: Run E2E tests
+      env:
+        API_BASE_URL: http://localhost:8000
+        TEST_TIMEOUT: 10m
       run: |
-        kubectl apply -f deployments/k8s/namespace.yaml
-        kubectl apply -f deployments/k8s/
-        kubectl rollout status deployment --namespace=linkflow --timeout=5m
-    
-    - name: Clean up
-      if: always()
-      run: rm -f kubeconfig
+        go test -v -tags=e2e ./tests/e2e/... -timeout ${TEST_TIMEOUT}
+
+    - name: Collect logs on failure
+      if: failure()
+      run: |
+        docker-compose logs > docker-compose-logs.txt
+        echo "=== Docker Compose Logs ===" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        tail -n 100 docker-compose-logs.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload logs
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: e2e-logs
+        path: docker-compose-logs.txt
+
+  notify:
+    name: Notify Status
+    runs-on: ubuntu-latest
+    needs: [lint, test, security, build, docker]
+    if: always()
+    steps:
+    - name: Send Slack notification
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: slackapi/slack-github-action@v1.24.0
+      with:
+        payload: |
+          {
+            "text": "CI Pipeline Status",
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "CI Pipeline ${{ job.status == 'success' && '✅ Passed' || '❌ Failed' }}"
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Repository:*\n${{ github.repository }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Branch:*\n${{ github.ref_name }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Commit:*\n<${{ github.event.head_commit.url }}|${{ github.sha }}>"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Author:*\n${{ github.actor }}"
+                  }
+                ]
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

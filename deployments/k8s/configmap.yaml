@@ -1,0 +1,152 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: linkflow-config
+  namespace: linkflow
+  labels:
+    app: linkflow
+    app.kubernetes.io/name: linkflow
+    app.kubernetes.io/component: config
+data:
+  # Database Configuration
+  DATABASE_HOST: postgres-service
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: linkflow
+  DATABASE_SSL_MODE: "require"
+  DATABASE_MAX_CONNECTIONS: "25"
+  DATABASE_MAX_IDLE_CONNECTIONS: "5"
+  
+  # Redis Configuration
+  REDIS_HOST: redis-service
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  REDIS_POOL_SIZE: "10"
+  
+  # Kafka Configuration
+  KAFKA_BROKERS: kafka-service:9092
+  KAFKA_CLIENT_ID: linkflow
+  KAFKA_CONSUMER_GROUP: linkflow-group
+  KAFKA_COMPRESSION: snappy
+  
+  # Elasticsearch Configuration
+  ELASTICSEARCH_URL: http://elasticsearch-service:9200
+  ELASTICSEARCH_INDEX_PREFIX: linkflow
+  
+  # Service Discovery
+  AUTH_SERVICE_URL: http://auth-service:8080
+  USER_SERVICE_URL: http://user-service:8080
+  WORKFLOW_SERVICE_URL: http://workflow-service:8080
+  EXECUTION_SERVICE_URL: http://execution-service:8080
+  
+  # API Gateway
+  KONG_ADMIN_URL: http://kong-admin:8001
+  KONG_PROXY_URL: http://kong-proxy:8000
+  
+  # Monitoring
+  PROMETHEUS_ENDPOINT: http://prometheus-service:9090
+  GRAFANA_URL: http://grafana-service:3000
+  
+  # Tracing
+  JAEGER_ENDPOINT: http://jaeger-collector:14268/api/traces
+  JAEGER_AGENT_HOST: jaeger-agent
+  JAEGER_AGENT_PORT: "6831"
+  TRACE_SAMPLING_RATE: "0.1"
+  
+  # Application Settings
+  APP_ENV: production
+  LOG_LEVEL: info
+  LOG_FORMAT: json
+  
+  # CORS Settings
+  CORS_ALLOWED_ORIGINS: "*"
+  CORS_ALLOWED_METHODS: "GET,POST,PUT,DELETE,OPTIONS"
+  CORS_ALLOWED_HEADERS: "Content-Type,Authorization"
+  
+  # Rate Limiting
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_REQUESTS_PER_MINUTE: "100"
+  RATE_LIMIT_BURST: "20"
+  
+  # Feature Flags
+  FEATURE_AUTH_SERVICE: "true"
+  FEATURE_WORKFLOW_ENGINE: "true"
+  FEATURE_EXECUTION_SERVICE: "true"
+  FEATURE_ANALYTICS: "true"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: linkflow-scripts
+  namespace: linkflow
+  labels:
+    app: linkflow
+    app.kubernetes.io/name: linkflow
+    app.kubernetes.io/component: scripts
+data:
+  healthcheck.sh: |
+    #!/bin/sh
+    curl -f http://localhost:${SERVICE_PORT:-8080}/health || exit 1
+  
+  readiness.sh: |
+    #!/bin/sh
+    curl -f http://localhost:${SERVICE_PORT:-8080}/ready || exit 1
+  
+  init-db.sh: |
+    #!/bin/sh
+    echo "Waiting for database..."
+    while ! nc -z ${DATABASE_HOST} ${DATABASE_PORT}; do
+      sleep 1
+    done
+    echo "Database is ready!"
+  
+  init-kafka.sh: |
+    #!/bin/sh
+    echo "Waiting for Kafka..."
+    while ! nc -z ${KAFKA_BROKERS%%:*} ${KAFKA_BROKERS##*:}; do
+      sleep 1
+    done
+    echo "Kafka is ready!"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: linkflow
+  labels:
+    app: linkflow
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+        - role: pod
+          namespaces:
+            names:
+            - linkflow
+        relabel_configs:
+        - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+          action: keep
+          regex: true
+        - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+          action: replace
+          target_label: __metrics_path__
+          regex: (.+)
+        - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+          action: replace
+          regex: ([^:]+)(?::\d+)?;(\d+)
+          replacement: $1:$2
+          target_label: __address__
+        - action: labelmap
+          regex: __meta_kubernetes_pod_label_(.+)
+        - source_labels: [__meta_kubernetes_namespace]
+          action: replace
+          target_label: kubernetes_namespace
+        - source_labels: [__meta_kubernetes_pod_name]
+          action: replace
+          target_label: kubernetes_pod_name

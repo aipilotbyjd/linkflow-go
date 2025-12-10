@@ -23,6 +23,7 @@ type Workflow struct {
 	Tags        []string     `json:"tags" gorm:"serializer:json"`
 	CreatedAt   time.Time    `json:"createdAt"`
 	UpdatedAt   time.Time    `json:"updatedAt"`
+	DeletedAt   *time.Time   `json:"deletedAt,omitempty" gorm:"index"`
 }
 
 type Node struct {

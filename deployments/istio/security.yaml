@@ -1,0 +1,131 @@
+# Enable mTLS for all services in linkflow namespace
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: linkflow
+spec:
+  mtls:
+    mode: STRICT
+---
+# mTLS for specific services
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: auth-service-mtls
+  namespace: linkflow
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    8080:
+      mode: STRICT
+---
+# Authorization Policy - Default deny all
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all
+  namespace: linkflow
+spec:
+  {}  # Empty spec means deny all
+---
+# Allow traffic from ingress gateway
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-ingress
+  namespace: linkflow
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"]
+  - from:
+    - source:
+        namespaces: ["linkflow"]
+---
+# Allow inter-service communication
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-inter-service
+  namespace: linkflow
+spec:
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        namespaces: ["linkflow"]
+    to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE"]
+---
+# JWT Authentication for external requests
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: jwt-auth
+  namespace: linkflow
+spec:
+  selector:
+    matchLabels:
+      app: workflow-service
+  jwtRules:
+  - issuer: "https://auth.linkflow.io"
+    jwksUri: "https://auth.linkflow.io/.well-known/jwks.json"
+    audiences:
+    - "linkflow"
+    forwardOriginalToken: true
+---
+# Require JWT for workflow service
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: require-jwt
+  namespace: linkflow
+spec:
+  selector:
+    matchLabels:
+      app: workflow-service
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        requestPrincipals: ["https://auth.linkflow.io/*"]
+    when:
+    - key: request.auth.claims[role]
+      values: ["admin", "user"]
+---
+# Rate limiting
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ratelimit-config
+  namespace: linkflow
+data:
+  config.yaml: |
+    domain: linkflow-ratelimit
+    descriptors:
+      - key: PATH
+        value: "/api/auth/login"
+        rate_limit:
+          unit: minute
+          requests_per_unit: 10
+      - key: PATH
+        value: "/api/workflows"
+        rate_limit:
+          unit: minute
+          requests_per_unit: 100
+      - key: PATH
+        value: "/api/executions"
+        rate_limit:
+          unit: minute
+          requests_per_unit: 50

@@ -1,220 +1,92 @@
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
-  name: linkflow-gateway
+  name: linkflow-vs
   namespace: linkflow
 spec:
   hosts:
-  - linkflow.local
-  - "*.linkflow.local"
+  - "linkflow.io"
+  - "api.linkflow.io"
   gateways:
   - linkflow-gateway
   http:
-  # Auth Service Routes
   - match:
     - uri:
-        prefix: /api/v1/auth
+        prefix: /api/auth
     route:
     - destination:
         host: auth-service
         port:
-          number: 8001
-      weight: 100
+          number: 8080
     timeout: 30s
     retries:
       attempts: 3
       perTryTimeout: 10s
-      retryOn: gateway-error,connect-failure,refused-stream
-    
-  # User Service Routes
   - match:
     - uri:
-        prefix: /api/v1/users
-    route:
-    - destination:
-        host: user-service
-        port:
-          number: 8002
-      weight: 100
-    corsPolicy:
-      allowOrigins:
-      - exact: "*"
-      allowMethods:
-      - GET
-      - POST
-      - PUT
-      - DELETE
-      allowHeaders:
-      - authorization
-      - content-type
-    
-  # Workflow Service Routes
-  - match:
-    - uri:
-        prefix: /api/v1/workflows
+        prefix: /api/workflows
     route:
     - destination:
         host: workflow-service
         port:
-          number: 8003
-      weight: 100
-    fault:
-      delay:
-        percentage:
-          value: 0.1
-        fixedDelay: 5s
-    
-  # Execution Service Routes
+          number: 8080
+    timeout: 30s
   - match:
     - uri:
-        prefix: /api/v1/executions
+        prefix: /api/executions
     route:
     - destination:
         host: execution-service
         port:
-          number: 8004
-      weight: 100
-    
-  # GraphQL Routes
+          number: 8080
+    timeout: 60s
   - match:
     - uri:
-        prefix: /graphql
+        prefix: /api/users
     route:
     - destination:
-        host: graphql-gateway
-        port:
-          number: 4000
-      weight: 100
-    
-  # WebSocket Routes
-  - match:
-    - uri:
-        prefix: /ws
-    - headers:
-        upgrade:
-          exact: websocket
-    route:
-    - destination:
-        host: websocket-service
+        host: user-service
         port:
           number: 8080
-      weight: 100
-    websocketUpgrade: true
-
+    timeout: 30s
 ---
-apiVersion: networking.istio.io/v1alpha3
-kind: Gateway
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
 metadata:
-  name: linkflow-gateway
-  namespace: linkflow
-spec:
-  selector:
-    istio: ingressgateway
-  servers:
-  - port:
-      number: 80
-      name: http
-      protocol: HTTP
-    hosts:
-    - linkflow.local
-    - "*.linkflow.local"
-  - port:
-      number: 443
-      name: https
-      protocol: HTTPS
-    tls:
-      mode: SIMPLE
-      credentialName: linkflow-tls-cert
-    hosts:
-    - linkflow.local
-    - "*.linkflow.local"
-
----
-apiVersion: networking.istio.io/v1alpha3
-kind: DestinationRule
-metadata:
-  name: auth-service
-  namespace: linkflow
-spec:
-  host: auth-service
-  trafficPolicy:
-    connectionPool:
-      tcp:
-        maxConnections: 100
-      http:
-        http1MaxPendingRequests: 100
-        http2MaxRequests: 100
-        maxRequestsPerConnection: 2
-    loadBalancer:
-      simple: ROUND_ROBIN
-    outlierDetection:
-      consecutiveErrors: 5
-      interval: 30s
-      baseEjectionTime: 30s
-      maxEjectionPercent: 50
-      minHealthPercent: 30
-  subsets:
-  - name: v1
-    labels:
-      version: v1
-    trafficPolicy:
-      connectionPool:
-        tcp:
-          maxConnections: 50
-
----
-apiVersion: networking.istio.io/v1alpha3
-kind: ServiceEntry
-metadata:
-  name: external-apis
+  name: workflow-service-vs
   namespace: linkflow
 spec:
   hosts:
-  - api.sendgrid.com
-  - api.stripe.com
-  - oauth2.googleapis.com
-  ports:
-  - number: 443
-    name: https
-    protocol: HTTPS
-  location: MESH_EXTERNAL
-  resolution: DNS
-
+  - workflow-service
+  http:
+  - match:
+    - headers:
+        canary:
+          exact: "true"
+    route:
+    - destination:
+        host: workflow-service
+        subset: v2
+      weight: 100
+  - route:
+    - destination:
+        host: workflow-service
+        subset: v1
+      weight: 90
+    - destination:
+        host: workflow-service
+        subset: v2
+      weight: 10  # 10% canary traffic
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s  # Inject 5s delay for 0.1% of requests
 ---
-apiVersion: security.istio.io/v1beta1
-kind: PeerAuthentication
-metadata:
-  name: default
-  namespace: linkflow
-spec:
-  mtls:
-    mode: STRICT
-
----
-apiVersion: security.istio.io/v1beta1
-kind: AuthorizationPolicy
-metadata:
-  name: auth-service-policy
-  namespace: linkflow
-spec:
-  selector:
-    matchLabels:
-      app: auth-service
-  action: ALLOW
-  rules:
-  - from:
-    - source:
-        principals: ["cluster.local/ns/linkflow/sa/gateway-service-account"]
-    to:
-    - operation:
-        methods: ["GET", "POST", "PUT", "DELETE"]
-        paths: ["/api/v1/auth/*"]
-
----
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
-  name: circuit-breaker
+  name: execution-service-vs
   namespace: linkflow
 spec:
   hosts:
@@ -223,13 +95,9 @@ spec:
   - route:
     - destination:
         host: execution-service
-    retries:
-      attempts: 3
-      perTryTimeout: 5s
-      retryOn: 5xx,reset,connect-failure,refused-stream
-    timeout: 30s
-    fault:
-      abort:
-        percentage:
-          value: 0.001
-        httpStatus: 503
+        subset: stable
+    circuitBreaker:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50

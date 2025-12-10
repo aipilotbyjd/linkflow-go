@@ -1,0 +1,162 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kong-gateway
+  namespace: linkflow
+  labels:
+    app: kong-gateway
+    app.kubernetes.io/name: kong
+    app.kubernetes.io/component: gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: kong-gateway
+  template:
+    metadata:
+      labels:
+        app: kong-gateway
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: kong
+      initContainers:
+      - name: wait-for-db
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres-service 5432; do echo waiting for db; sleep 2; done;']
+      - name: kong-migrations
+        image: kong:3.5-alpine
+        env:
+        - name: KONG_DATABASE
+          value: "postgres"
+        - name: KONG_PG_HOST
+          value: postgres-service
+        - name: KONG_PG_PORT
+          value: "5432"
+        - name: KONG_PG_DATABASE
+          value: kong
+        - name: KONG_PG_USER
+          valueFrom:
+            secretKeyRef:
+              name: kong-database-credentials
+              key: username
+        - name: KONG_PG_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: kong-database-credentials
+              key: password
+        command: ["kong", "migrations", "bootstrap"]
+      containers:
+      - name: kong
+        image: kong:3.5-alpine
+        env:
+        - name: KONG_DATABASE
+          value: "postgres"
+        - name: KONG_PG_HOST
+          value: postgres-service
+        - name: KONG_PG_PORT
+          value: "5432"
+        - name: KONG_PG_DATABASE
+          value: kong
+        - name: KONG_PG_USER
+          valueFrom:
+            secretKeyRef:
+              name: kong-database-credentials
+              key: username
+        - name: KONG_PG_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: kong-database-credentials
+              key: password
+        - name: KONG_PROXY_ACCESS_LOG
+          value: "/dev/stdout"
+        - name: KONG_ADMIN_ACCESS_LOG
+          value: "/dev/stdout"
+        - name: KONG_PROXY_ERROR_LOG
+          value: "/dev/stderr"
+        - name: KONG_ADMIN_ERROR_LOG
+          value: "/dev/stderr"
+        - name: KONG_ADMIN_LISTEN
+          value: "0.0.0.0:8001"
+        - name: KONG_PROXY_LISTEN
+          value: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
+        - name: KONG_STATUS_LISTEN
+          value: "0.0.0.0:8100"
+        - name: KONG_PLUGINS
+          value: "bundled,prometheus"
+        ports:
+        - name: proxy
+          containerPort: 8000
+          protocol: TCP
+        - name: proxy-ssl
+          containerPort: 8443
+          protocol: TCP
+        - name: admin
+          containerPort: 8001
+          protocol: TCP
+        - name: status
+          containerPort: 8100
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /status
+            port: 8100
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /status
+            port: 8100
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-proxy
+  namespace: linkflow
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  type: LoadBalancer
+  selector:
+    app: kong-gateway
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: proxy
+  - port: 443
+    targetPort: 8443
+    protocol: TCP
+    name: proxy-ssl
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-admin
+  namespace: linkflow
+spec:
+  type: ClusterIP
+  selector:
+    app: kong-gateway
+  ports:
+  - port: 8001
+    targetPort: 8001
+    protocol: TCP
+    name: admin
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kong
+  namespace: linkflow

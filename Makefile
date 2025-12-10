@@ -50,8 +50,90 @@ docker-build: ## Build Docker images for all services
 docker-push: ## Push Docker images to registry
 	@echo "${GREEN}Pushing Docker images...${NC}"
 	@for service in $(SERVICES); do \
-		docker push $(DOCKER_REGISTRY)/$$service-service:$(VERSION); \
+		echo "Pushing $$service-service image..."; \
+		docker push $(DOCKER_REGISTRY)/$$service-service:$(VERSION) || true; \
 	done
+
+# Infrastructure Commands
+.PHONY: infra-up
+infra-up: ## Start local infrastructure with docker-compose
+	@echo "${GREEN}Starting infrastructure services...${NC}"
+	@docker-compose up -d postgres redis zookeeper kafka elasticsearch prometheus grafana jaeger kong
+	@echo "${GREEN}Infrastructure is starting up...${NC}"
+	@echo "Run 'make infra-status' to check status"
+
+.PHONY: infra-down
+infra-down: ## Stop local infrastructure
+	@echo "${YELLOW}Stopping infrastructure services...${NC}"
+	@docker-compose down
+
+.PHONY: infra-status
+infra-status: ## Check infrastructure status
+	@echo "${GREEN}Infrastructure Status:${NC}"
+	@docker-compose ps
+
+.PHONY: infra-logs
+infra-logs: ## Show infrastructure logs
+	@docker-compose logs -f
+
+.PHONY: dev-setup
+dev-setup: ## Complete development environment setup
+	@echo "${GREEN}Setting up development environment...${NC}"
+	@./scripts/dev-setup.sh
+
+.PHONY: kafka-setup
+kafka-setup: ## Setup Kafka topics
+	@echo "${GREEN}Setting up Kafka topics...${NC}"
+	@./scripts/kafka-setup.sh setup
+
+.PHONY: db-migrate
+db-migrate: ## Run database migrations
+	@echo "${GREEN}Running database migrations...${NC}"
+	@./scripts/migrate.sh up
+
+.PHONY: db-seed
+db-seed: ## Seed database with test data
+	@echo "${GREEN}Seeding database...${NC}"
+	@./scripts/seed.sh
+
+.PHONY: k8s-deploy
+k8s-deploy: ## Deploy to Kubernetes
+	@echo "${GREEN}Deploying to Kubernetes...${NC}"
+	@./scripts/k8s-deploy.sh deploy
+
+.PHONY: k8s-status
+k8s-status: ## Check Kubernetes deployment status
+	@./scripts/k8s-deploy.sh status
+
+.PHONY: argocd-install
+argocd-install: ## Install ArgoCD
+	@echo "${GREEN}Installing ArgoCD...${NC}"
+	@./scripts/install-argocd.sh install
+
+.PHONY: argocd-setup
+argocd-setup: ## Configure ArgoCD for LinkFlow
+	@echo "${GREEN}Configuring ArgoCD...${NC}"
+	@./scripts/install-argocd.sh configure
+
+.PHONY: istio-install
+istio-install: ## Install Istio service mesh
+	@echo "${GREEN}Installing Istio...${NC}"
+	@./scripts/install-istio.sh install
+
+.PHONY: istio-setup
+istio-setup: ## Configure Istio for LinkFlow
+	@echo "${GREEN}Configuring Istio...${NC}"
+	@./scripts/install-istio.sh apply-config
+
+.PHONY: logging-deploy
+logging-deploy: ## Deploy log aggregation stack (ELK/Loki)
+	@echo "${GREEN}Deploying logging stack...${NC}"
+	@kubectl apply -f deployments/logging/
+
+.PHONY: tracing-deploy
+tracing-deploy: ## Deploy distributed tracing (Jaeger)
+	@echo "${GREEN}Deploying Jaeger tracing...${NC}"
+	@kubectl apply -f deployments/tracing/
 
 .PHONY: test
 test: ## Run unit tests

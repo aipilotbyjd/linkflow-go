@@ -56,6 +56,15 @@ type AuthConfig struct {
 	RefreshExpiry    int    `mapstructure:"refresh_expiry"`
 	PrivateKeyPath   string `mapstructure:"private_key_path"`
 	PublicKeyPath    string `mapstructure:"public_key_path"`
+	JWT              JWTConfig `mapstructure:"jwt"`
+}
+
+type JWTConfig struct {
+	SecretKey    string `mapstructure:"secret_key"`
+	ExpiryHours  int    `mapstructure:"expiry_hours"`
+	RefreshDays  int    `mapstructure:"refresh_days"`
+	Issuer       string `mapstructure:"issuer"`
+	Algorithm    string `mapstructure:"algorithm"` // HS256 for dev, RS256 for prod
 }
 
 type TelemetryConfig struct {
@@ -137,6 +146,11 @@ func setDefaults() {
 	// Auth defaults
 	viper.SetDefault("auth.jwt_expiry", 900)        // 15 minutes
 	viper.SetDefault("auth.refresh_expiry", 604800) // 7 days
+	viper.SetDefault("auth.jwt.secret_key", "development-secret-key-change-in-production")
+	viper.SetDefault("auth.jwt.expiry_hours", 1)   // 1 hour for access token
+	viper.SetDefault("auth.jwt.refresh_days", 7)    // 7 days for refresh token
+	viper.SetDefault("auth.jwt.issuer", "linkflow-auth")
+	viper.SetDefault("auth.jwt.algorithm", "HS256") // HS256 for dev, RS256 for prod
 	
 	// Telemetry defaults
 	viper.SetDefault("telemetry.enabled", true)

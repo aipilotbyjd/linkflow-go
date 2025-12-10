@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"time"
 
@@ -14,11 +15,13 @@ import (
 )
 
 type Manager struct {
-	privateKey *rsa.PrivateKey
-	publicKey  *rsa.PublicKey
-	issuer     string
-	expiry     time.Duration
+	privateKey    *rsa.PrivateKey
+	publicKey     *rsa.PublicKey
+	secretKey     []byte
+	issuer        string
+	expiry        time.Duration
 	refreshExpiry time.Duration
+	algorithm     string
 }
 
 type Claims struct {
@@ -29,14 +32,49 @@ type Claims struct {
 	Permissions []string `json:"permissions"`
 }
 
+type RefreshClaims struct {
+	jwt.RegisteredClaims
+	UserID string `json:"userId"`
+}
+
 func NewManager(cfg config.AuthConfig) (*Manager, error) {
-	// For development, use a simple secret
-	// In production, use RSA keys
-	return &Manager{
-		issuer:        "linkflow-auth",
-		expiry:        time.Duration(cfg.JWTExpiry) * time.Second,
-		refreshExpiry: time.Duration(cfg.RefreshExpiry) * time.Second,
-	}, nil
+	m := &Manager{
+		issuer:        cfg.JWT.Issuer,
+		expiry:        time.Duration(cfg.JWT.ExpiryHours) * time.Hour,
+		refreshExpiry: time.Duration(cfg.JWT.RefreshDays) * 24 * time.Hour,
+		algorithm:     cfg.JWT.Algorithm,
+	}
+	
+	// For RS256 (production), load RSA keys
+	if cfg.JWT.Algorithm == "RS256" {
+		if cfg.PrivateKeyPath != "" {
+			privateKey, err := loadPrivateKey(cfg.PrivateKeyPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load private key: %w", err)
+			}
+			m.privateKey = privateKey
+		}
+		
+		if cfg.PublicKeyPath != "" {
+			publicKey, err := loadPublicKey(cfg.PublicKeyPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load public key: %w", err)
+			}
+			m.publicKey = publicKey
+		}
+		
+		if m.privateKey == nil || m.publicKey == nil {
+			return nil, errors.New("RS256 algorithm requires both private and public keys")
+		}
+	} else {
+		// For HS256 (development), use secret key
+		if cfg.JWT.SecretKey == "" {
+			return nil, errors.New("HS256 algorithm requires a secret key")
+		}
+		m.secretKey = []byte(cfg.JWT.SecretKey)
+	}
+	
+	return m, nil
 }
 
 func (m *Manager) GenerateToken(userID, email string, roles, permissions []string) (string, error) {
@@ -54,31 +92,55 @@ func (m *Manager) GenerateToken(userID, email string, roles, permissions []strin
 		Permissions: permissions,
 	}
 	
-	// For simplicity, using HS256 in development
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte("your-secret-key"))
+	var token *jwt.Token
+	if m.algorithm == "RS256" {
+		token = jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		return token.SignedString(m.privateKey)
+	}
+	
+	// Default to HS256
+	token = jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(m.secretKey)
 }
 
 func (m *Manager) GenerateRefreshToken(userID string) (string, error) {
-	claims := jwt.RegisteredClaims{
-		Issuer:    m.issuer,
-		Subject:   userID,
-		IssuedAt:  jwt.NewNumericDate(time.Now()),
-		ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.refreshExpiry)),
-		ID:        uuid.New().String(),
+	claims := RefreshClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    m.issuer,
+			Subject:   userID,
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.refreshExpiry)),
+			ID:        uuid.New().String(),
+		},
+		UserID: userID,
 	}
 	
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte("your-refresh-secret-key"))
+	var token *jwt.Token
+	if m.algorithm == "RS256" {
+		token = jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		return token.SignedString(m.privateKey)
+	}
+	
+	// Default to HS256
+	token = jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(m.secretKey)
 }
 
 func (m *Manager) ValidateToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		// Validate signing method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
+		// Validate signing method based on configured algorithm
+		if m.algorithm == "RS256" {
+			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			return m.publicKey, nil
 		}
-		return []byte("your-secret-key"), nil
+		
+		// Default to HS256
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return m.secretKey, nil
 	})
 	
 	if err != nil {
@@ -94,23 +156,56 @@ func (m *Manager) ValidateToken(tokenString string) (*Claims, error) {
 }
 
 func (m *Manager) ValidateRefreshToken(tokenString string) (string, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
+	token, err := jwt.ParseWithClaims(tokenString, &RefreshClaims{}, func(token *jwt.Token) (interface{}, error) {
+		// Validate signing method based on configured algorithm
+		if m.algorithm == "RS256" {
+			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			return m.publicKey, nil
 		}
-		return []byte("your-refresh-secret-key"), nil
+		
+		// Default to HS256
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return m.secretKey, nil
 	})
 	
 	if err != nil {
 		return "", err
 	}
 	
-	claims, ok := token.Claims.(*jwt.RegisteredClaims)
+	claims, ok := token.Claims.(*RefreshClaims)
 	if !ok || !token.Valid {
 		return "", errors.New("invalid refresh token")
 	}
 	
-	return claims.Subject, nil
+	return claims.UserID, nil
+}
+
+// RefreshToken generates a new access token using a valid refresh token
+func (m *Manager) RefreshToken(oldToken string) (string, error) {
+	// First validate the old access token (even if expired, we just need the claims)
+	token, _ := jwt.ParseWithClaims(oldToken, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		if m.algorithm == "RS256" {
+			return m.publicKey, nil
+		}
+		return m.secretKey, nil
+	})
+	
+	// Even if the token is expired, we can still extract claims
+	if token == nil {
+		return "", errors.New("invalid token format")
+	}
+	
+	claims, ok := token.Claims.(*Claims)
+	if !ok {
+		return "", errors.New("invalid token claims")
+	}
+	
+	// Generate new token with same claims but new expiry
+	return m.GenerateToken(claims.UserID, claims.Email, claims.Roles, claims.Permissions)
 }
 
 // LoadPrivateKey loads RSA private key from file (for production)

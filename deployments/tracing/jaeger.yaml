@@ -1,0 +1,221 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-query
+  namespace: linkflow
+  labels:
+    app: jaeger
+    component: query
+spec:
+  ports:
+  - name: http
+    port: 16686
+    targetPort: 16686
+  selector:
+    app: jaeger
+    component: all-in-one
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-collector
+  namespace: linkflow
+  labels:
+    app: jaeger
+    component: collector
+spec:
+  ports:
+  - name: jaeger-collector-tchannel
+    port: 14267
+    protocol: TCP
+    targetPort: 14267
+  - name: jaeger-collector-http
+    port: 14268
+    protocol: TCP
+    targetPort: 14268
+  - name: jaeger-collector-grpc
+    port: 14250
+    protocol: TCP
+    targetPort: 14250
+  - name: otlp-grpc
+    port: 4317
+    protocol: TCP
+    targetPort: 4317
+  - name: otlp-http
+    port: 4318
+    protocol: TCP
+    targetPort: 4318
+  selector:
+    app: jaeger
+    component: all-in-one
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-agent
+  namespace: linkflow
+  labels:
+    app: jaeger
+    component: agent
+spec:
+  ports:
+  - name: agent-zipkin-thrift
+    port: 5775
+    protocol: UDP
+    targetPort: 5775
+  - name: agent-compact
+    port: 6831
+    protocol: UDP
+    targetPort: 6831
+  - name: agent-binary
+    port: 6832
+    protocol: UDP
+    targetPort: 6832
+  - name: agent-configs
+    port: 5778
+    protocol: TCP
+    targetPort: 5778
+  clusterIP: None
+  selector:
+    app: jaeger
+    component: all-in-one
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: linkflow
+  labels:
+    app: jaeger
+    component: all-in-one
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+      component: all-in-one
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: jaeger
+        component: all-in-one
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "16686"
+    spec:
+      containers:
+      - name: jaeger
+        image: jaegertracing/all-in-one:1.52
+        env:
+        - name: SPAN_STORAGE_TYPE
+          value: elasticsearch
+        - name: ES_SERVER_URLS
+          value: http://elasticsearch:9200
+        - name: ES_INDEX_PREFIX
+          value: linkflow-traces
+        - name: COLLECTOR_OTLP_ENABLED
+          value: "true"
+        - name: LOG_LEVEL
+          value: info
+        - name: METRICS_BACKEND
+          value: prometheus
+        - name: METRICS_HTTP_ROUTE
+          value: /metrics
+        ports:
+        - containerPort: 5775
+          protocol: UDP
+        - containerPort: 6831
+          protocol: UDP
+        - containerPort: 6832
+          protocol: UDP
+        - containerPort: 5778
+          protocol: TCP
+        - containerPort: 16686
+          protocol: TCP
+        - containerPort: 14267
+          protocol: TCP
+        - containerPort: 14268
+          protocol: TCP
+        - containerPort: 14250
+          protocol: TCP
+        - containerPort: 4317
+          protocol: TCP
+        - containerPort: 4318
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 16686
+          initialDelaySeconds: 20
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 16686
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        resources:
+          requests:
+            memory: 512Mi
+            cpu: 250m
+          limits:
+            memory: 1Gi
+            cpu: 500m
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jaeger-ingress
+  namespace: linkflow
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  tls:
+  - hosts:
+    - jaeger.linkflow.io
+    secretName: linkflow-tls
+  rules:
+  - host: jaeger.linkflow.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: jaeger-query
+            port:
+              number: 16686
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jaeger-sampling
+  namespace: linkflow
+data:
+  sampling.json: |
+    {
+      "default_strategy": {
+        "type": "probabilistic",
+        "param": 0.01
+      },
+      "service_strategies": [
+        {
+          "service": "auth-service",
+          "type": "probabilistic",
+          "param": 0.05
+        },
+        {
+          "service": "workflow-service",
+          "type": "probabilistic",
+          "param": 0.1
+        },
+        {
+          "service": "execution-service",
+          "type": "probabilistic",
+          "param": 0.1
+        }
+      ]
+    }

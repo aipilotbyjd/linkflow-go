@@ -1,0 +1,26 @@
+p, super_admin, *, *
+p, admin, /api/v1/users/*, *
+p, admin, /api/v1/workflows/*, *
+p, admin, /api/v1/nodes/*, *
+p, admin, /api/v1/schedules/*, *
+p, admin, /api/v1/credentials/*, read
+p, admin, /api/v1/analytics/*, *
+p, admin, /api/v1/audit/*, *
+
+p, user, /api/v1/users/me, *
+p, user, /api/v1/users/:id, read
+p, user, /api/v1/workflows/*, create
+p, user, /api/v1/workflows/owned/*, *
+p, user, /api/v1/nodes/*, read
+p, user, /api/v1/schedules/owned/*, *
+p, user, /api/v1/credentials/owned/*, *
+p, user, /api/v1/analytics/owned/*, read
+
+p, viewer, /api/v1/workflows/*, read
+p, viewer, /api/v1/nodes/*, read
+p, viewer, /api/v1/users/*, read
+p, viewer, /api/v1/analytics/*, read
+
+g, alice, admin
+g, bob, user
+g, charlie, viewer

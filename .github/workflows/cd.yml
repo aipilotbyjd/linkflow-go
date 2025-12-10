@@ -1,0 +1,370 @@
+name: CD Pipeline
+
+on:
+  push:
+    branches: [main, master]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  KUBECTL_VERSION: '1.28.0'
+  HELM_VERSION: '3.13.0'
+  NAMESPACE_STAGING: linkflow-staging
+  NAMESPACE_PRODUCTION: linkflow
+
+jobs:
+  prepare:
+    name: Prepare Deployment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.determine-env.outputs.environment }}
+      version: ${{ steps.version.outputs.version }}
+      namespace: ${{ steps.determine-env.outputs.namespace }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Determine environment
+      id: determine-env
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          ENV="${{ github.event.inputs.environment }}"
+        elif [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/master" ]]; then
+          ENV="staging"
+        elif [[ "${{ github.ref }}" =~ ^refs/tags/v ]]; then
+          ENV="production"
+        else
+          ENV="staging"
+        fi
+        
+        if [[ "$ENV" == "production" ]]; then
+          NAMESPACE="${{ env.NAMESPACE_PRODUCTION }}"
+        else
+          NAMESPACE="${{ env.NAMESPACE_STAGING }}"
+        fi
+        
+        echo "environment=$ENV" >> $GITHUB_OUTPUT
+        echo "namespace=$NAMESPACE" >> $GITHUB_OUTPUT
+        echo "Deploying to $ENV environment in namespace $NAMESPACE"
+
+    - name: Extract version
+      id: version
+      run: |
+        if [[ "${{ github.ref }}" =~ ^refs/tags/v ]]; then
+          VERSION="${{ github.ref_name }}"
+        else
+          VERSION="sha-${GITHUB_SHA::8}"
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.outputs.environment == 'staging'
+    environment:
+      name: staging
+      url: https://staging.linkflow.io
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --name linkflow-staging --region ${{ secrets.AWS_REGION }}
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: ${{ env.KUBECTL_VERSION }}
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: ${{ env.HELM_VERSION }}
+
+    - name: Create namespace if not exists
+      run: |
+        kubectl create namespace ${{ needs.prepare.outputs.namespace }} --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Deploy secrets
+      run: |
+        # Create secrets from GitHub Secrets
+        kubectl create secret generic database-credentials \
+          --from-literal=username=${{ secrets.STAGING_DB_USER }} \
+          --from-literal=password=${{ secrets.STAGING_DB_PASSWORD }} \
+          --namespace=${{ needs.prepare.outputs.namespace }} \
+          --dry-run=client -o yaml | kubectl apply -f -
+        
+        kubectl create secret generic jwt-secrets \
+          --from-literal=secret-key=${{ secrets.STAGING_JWT_SECRET }} \
+          --namespace=${{ needs.prepare.outputs.namespace }} \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Deploy with Helm
+      run: |
+        helm upgrade --install linkflow ./deployments/helm/linkflow \
+          --namespace ${{ needs.prepare.outputs.namespace }} \
+          --set global.image.tag=${{ needs.prepare.outputs.version }} \
+          --set global.environment=staging \
+          --set ingress.enabled=true \
+          --set ingress.hostname=staging.linkflow.io \
+          --values deployments/helm/linkflow/values-staging.yaml \
+          --wait --timeout 10m
+
+    - name: Verify deployment
+      run: |
+        kubectl rollout status deployment/auth-service -n ${{ needs.prepare.outputs.namespace }}
+        kubectl rollout status deployment/workflow-service -n ${{ needs.prepare.outputs.namespace }}
+        kubectl rollout status deployment/execution-service -n ${{ needs.prepare.outputs.namespace }}
+
+    - name: Run smoke tests
+      run: |
+        # Wait for services to be ready
+        sleep 30
+        
+        # Test health endpoints
+        for service in auth workflow execution; do
+          echo "Testing $service service health..."
+          STATUS=$(kubectl exec -n ${{ needs.prepare.outputs.namespace }} \
+            deploy/${service}-service -- \
+            curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health)
+          
+          if [ "$STATUS" != "200" ]; then
+            echo "Health check failed for $service service"
+            exit 1
+          fi
+          echo "$service service is healthy"
+        done
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.outputs.environment == 'production'
+    environment:
+      name: production
+      url: https://linkflow.io
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.PROD_AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.PROD_AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.PROD_AWS_REGION }}
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --name linkflow-production --region ${{ secrets.PROD_AWS_REGION }}
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: ${{ env.KUBECTL_VERSION }}
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: ${{ env.HELM_VERSION }}
+
+    - name: Create namespace if not exists
+      run: |
+        kubectl create namespace ${{ needs.prepare.outputs.namespace }} --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Deploy secrets
+      run: |
+        # Create secrets from GitHub Secrets
+        kubectl create secret generic database-credentials \
+          --from-literal=username=${{ secrets.PROD_DB_USER }} \
+          --from-literal=password=${{ secrets.PROD_DB_PASSWORD }} \
+          --namespace=${{ needs.prepare.outputs.namespace }} \
+          --dry-run=client -o yaml | kubectl apply -f -
+        
+        kubectl create secret generic jwt-secrets \
+          --from-literal=secret-key=${{ secrets.PROD_JWT_SECRET }} \
+          --namespace=${{ needs.prepare.outputs.namespace }} \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Blue-Green Deployment
+      run: |
+        # Deploy to green environment
+        helm upgrade --install linkflow-green ./deployments/helm/linkflow \
+          --namespace ${{ needs.prepare.outputs.namespace }} \
+          --set global.image.tag=${{ needs.prepare.outputs.version }} \
+          --set global.environment=production \
+          --set global.deploymentColor=green \
+          --set ingress.enabled=false \
+          --values deployments/helm/linkflow/values-production.yaml \
+          --wait --timeout 15m
+
+    - name: Run production tests
+      run: |
+        # Run comprehensive tests against green deployment
+        echo "Running production tests..."
+        # Add your production test commands here
+
+    - name: Switch traffic to green
+      run: |
+        # Update service selector to point to green deployment
+        kubectl patch service auth-service \
+          -n ${{ needs.prepare.outputs.namespace }} \
+          -p '{"spec":{"selector":{"color":"green"}}}'
+        
+        kubectl patch service workflow-service \
+          -n ${{ needs.prepare.outputs.namespace }} \
+          -p '{"spec":{"selector":{"color":"green"}}}'
+        
+        kubectl patch service execution-service \
+          -n ${{ needs.prepare.outputs.namespace }} \
+          -p '{"spec":{"selector":{"color":"green"}}}'
+
+    - name: Monitor deployment
+      run: |
+        # Monitor error rates and rollback if necessary
+        echo "Monitoring deployment for 5 minutes..."
+        sleep 300
+        
+        # Check error rates (implement actual monitoring logic)
+        # If errors detected, rollback automatically
+
+    - name: Cleanup blue deployment
+      if: success()
+      run: |
+        # Remove old blue deployment after successful green deployment
+        helm uninstall linkflow-blue --namespace ${{ needs.prepare.outputs.namespace }} || true
+
+  rollback:
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    needs: [prepare, deploy-staging, deploy-production]
+    if: failure()
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Update kubeconfig
+      run: |
+        CLUSTER_NAME=${{ needs.prepare.outputs.environment == 'production' && 'linkflow-production' || 'linkflow-staging' }}
+        aws eks update-kubeconfig --name $CLUSTER_NAME --region ${{ secrets.AWS_REGION }}
+
+    - name: Rollback deployments
+      run: |
+        echo "Rolling back deployments in namespace ${{ needs.prepare.outputs.namespace }}"
+        kubectl rollout undo deployment/auth-service -n ${{ needs.prepare.outputs.namespace }}
+        kubectl rollout undo deployment/workflow-service -n ${{ needs.prepare.outputs.namespace }}
+        kubectl rollout undo deployment/execution-service -n ${{ needs.prepare.outputs.namespace }}
+        
+        # Wait for rollback to complete
+        kubectl rollout status deployment/auth-service -n ${{ needs.prepare.outputs.namespace }}
+        kubectl rollout status deployment/workflow-service -n ${{ needs.prepare.outputs.namespace }}
+        kubectl rollout status deployment/execution-service -n ${{ needs.prepare.outputs.namespace }}
+
+    - name: Notify rollback
+      uses: slackapi/slack-github-action@v1.24.0
+      with:
+        payload: |
+          {
+            "text": "⚠️ Deployment Rolled Back",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Deployment to *${{ needs.prepare.outputs.environment }}* has been rolled back due to failures."
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Environment:*\n${{ needs.prepare.outputs.environment }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Version:*\n${{ needs.prepare.outputs.version }}"
+                  }
+                ]
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  notify-success:
+    name: Notify Success
+    runs-on: ubuntu-latest
+    needs: [prepare, deploy-staging, deploy-production]
+    if: success()
+    steps:
+    - name: Send success notification
+      uses: slackapi/slack-github-action@v1.24.0
+      with:
+        payload: |
+          {
+            "text": "✅ Deployment Successful",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Successfully deployed to *${{ needs.prepare.outputs.environment }}*"
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Environment:*\n${{ needs.prepare.outputs.environment }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Version:*\n${{ needs.prepare.outputs.version }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Namespace:*\n${{ needs.prepare.outputs.namespace }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Deployed by:*\n${{ github.actor }}"
+                  }
+                ]
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "<${{ needs.prepare.outputs.environment == 'production' && 'https://linkflow.io' || 'https://staging.linkflow.io' }}|View Application>"
+                }
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

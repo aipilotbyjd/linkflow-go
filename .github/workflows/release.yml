@@ -1,0 +1,305 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+  packages: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  prepare-release:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Determine version
+      id: version
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION="${{ github.ref_name }}"
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Release version: $VERSION"
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Generate changelog from commits since last tag
+        LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        if [ -z "$LAST_TAG" ]; then
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)" HEAD)
+        else
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${LAST_TAG}..HEAD)
+        fi
+        
+        # Save to file for multi-line output
+        echo "$CHANGELOG" > changelog.txt
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+  build-release:
+    name: Build Release Artifacts
+    runs-on: ubuntu-latest
+    needs: prepare-release
+    strategy:
+      matrix:
+        service: [auth, user, workflow, execution]
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        OUTPUT_NAME="linkflow-${{ matrix.service }}-${{ needs.prepare-release.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          OUTPUT_NAME="${OUTPUT_NAME}.exe"
+        fi
+        
+        CGO_ENABLED=0 go build \
+          -ldflags="-w -s -X main.Version=${{ needs.prepare-release.outputs.version }} -X main.BuildTime=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+          -o "bin/${OUTPUT_NAME}" \
+          ./cmd/services/${{ matrix.service }}
+
+    - name: Create tarball
+      if: matrix.goos != 'windows'
+      run: |
+        cd bin
+        tar czf linkflow-${{ matrix.service }}-${{ needs.prepare-release.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz \
+          linkflow-${{ matrix.service }}-${{ needs.prepare-release.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+
+    - name: Create zip
+      if: matrix.goos == 'windows'
+      run: |
+        cd bin
+        zip linkflow-${{ matrix.service }}-${{ needs.prepare-release.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.zip \
+          linkflow-${{ matrix.service }}-${{ needs.prepare-release.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.exe
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: release-binaries
+        path: |
+          bin/*.tar.gz
+          bin/*.zip
+
+  build-docker-release:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    needs: prepare-release
+    strategy:
+      matrix:
+        service: [auth, user, workflow, execution]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: deployments/docker/Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: |
+          linkflow/${{ matrix.service }}-service:${{ needs.prepare-release.outputs.version }}
+          linkflow/${{ matrix.service }}-service:latest
+          ghcr.io/${{ github.repository_owner }}/linkflow-${{ matrix.service }}:${{ needs.prepare-release.outputs.version }}
+          ghcr.io/${{ github.repository_owner }}/linkflow-${{ matrix.service }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          SERVICE_NAME=${{ matrix.service }}
+          VERSION=${{ needs.prepare-release.outputs.version }}
+
+  create-github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [prepare-release, build-release, build-docker-release]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: release-binaries
+        path: release-artifacts
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ needs.prepare-release.outputs.version }}
+        name: Release ${{ needs.prepare-release.outputs.version }}
+        body: |
+          ## 🚀 LinkFlow Release ${{ needs.prepare-release.outputs.version }}
+          
+          ### 📝 Changelog
+          ${{ needs.prepare-release.outputs.changelog }}
+          
+          ### 🐳 Docker Images
+          ```bash
+          # Docker Hub
+          docker pull linkflow/auth-service:${{ needs.prepare-release.outputs.version }}
+          docker pull linkflow/workflow-service:${{ needs.prepare-release.outputs.version }}
+          docker pull linkflow/execution-service:${{ needs.prepare-release.outputs.version }}
+          docker pull linkflow/user-service:${{ needs.prepare-release.outputs.version }}
+          
+          # GitHub Container Registry
+          docker pull ghcr.io/${{ github.repository_owner }}/linkflow-auth:${{ needs.prepare-release.outputs.version }}
+          docker pull ghcr.io/${{ github.repository_owner }}/linkflow-workflow:${{ needs.prepare-release.outputs.version }}
+          docker pull ghcr.io/${{ github.repository_owner }}/linkflow-execution:${{ needs.prepare-release.outputs.version }}
+          docker pull ghcr.io/${{ github.repository_owner }}/linkflow-user:${{ needs.prepare-release.outputs.version }}
+          ```
+          
+          ### 📦 Installation
+          
+          #### Using Docker Compose
+          ```bash
+          curl -L https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare-release.outputs.version }}/docker-compose.yml -o docker-compose.yml
+          docker-compose up -d
+          ```
+          
+          #### Using Helm
+          ```bash
+          helm repo add linkflow https://charts.linkflow.io
+          helm install linkflow linkflow/linkflow --version ${{ needs.prepare-release.outputs.version }}
+          ```
+          
+          ### 📋 Checksums
+          ```
+          SHA256SUMS available in release assets
+          ```
+        files: |
+          release-artifacts/*
+        draft: false
+        prerelease: ${{ contains(needs.prepare-release.outputs.version, '-') }}
+        generate_release_notes: true
+
+  publish-helm-chart:
+    name: Publish Helm Chart
+    runs-on: ubuntu-latest
+    needs: [prepare-release, create-github-release]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.13.0'
+
+    - name: Package Helm chart
+      run: |
+        helm package deployments/helm/linkflow \
+          --version ${{ needs.prepare-release.outputs.version }} \
+          --app-version ${{ needs.prepare-release.outputs.version }}
+
+    - name: Upload to chart repository
+      run: |
+        # This would upload to your Helm chart repository
+        # For example, using GitHub Pages or ChartMuseum
+        echo "Uploading Helm chart version ${{ needs.prepare-release.outputs.version }}"
+
+  notify-release:
+    name: Notify Release
+    runs-on: ubuntu-latest
+    needs: [prepare-release, create-github-release]
+    if: always()
+    steps:
+    - name: Send notification
+      uses: slackapi/slack-github-action@v1.24.0
+      with:
+        payload: |
+          {
+            "text": "🎉 New Release: ${{ needs.prepare-release.outputs.version }}",
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "LinkFlow ${{ needs.prepare-release.outputs.version }} Released!"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "A new version of LinkFlow has been released and is available for download."
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Version:*\n${{ needs.prepare-release.outputs.version }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Released by:*\n${{ github.actor }}"
+                  }
+                ]
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "<https://github.com/${{ github.repository }}/releases/tag/${{ needs.prepare-release.outputs.version }}|View Release>"
+                }
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

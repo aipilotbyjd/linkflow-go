@@ -4,4 +4,26 @@ metadata:
   name: linkflow
   labels:
     name: linkflow
-    istio-injection: enabled
+    environment: production
+    app.kubernetes.io/name: linkflow
+    app.kubernetes.io/managed-by: kubectl
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: linkflow-staging
+  labels:
+    name: linkflow-staging
+    environment: staging
+    app.kubernetes.io/name: linkflow
+    app.kubernetes.io/managed-by: kubectl
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: linkflow-dev
+  labels:
+    name: linkflow-dev
+    environment: development
+    app.kubernetes.io/name: linkflow
+    app.kubernetes.io/managed-by: kubectl
