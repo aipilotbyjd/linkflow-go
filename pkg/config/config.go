@@ -167,19 +167,20 @@ func setDefaults() {
 
 func overrideFromEnv(cfg *Config) {
 	// Override specific fields from environment variables
-	if host := viper.GetString("DB_HOST"); host != "" {
+	// Viper automatically reads LINKFLOW_DATABASE_HOST, LINKFLOW_DATABASE_PORT, etc
+	if host := viper.GetString("DATABASE_HOST"); host != "" {
 		cfg.Database.Host = host
 	}
-	if port := viper.GetInt("DB_PORT"); port != 0 {
+	if port := viper.GetInt("DATABASE_PORT"); port != 0 {
 		cfg.Database.Port = port
 	}
-	if user := viper.GetString("DB_USER"); user != "" {
+	if user := viper.GetString("DATABASE_USER"); user != "" {
 		cfg.Database.User = user
 	}
-	if pass := viper.GetString("DB_PASSWORD"); pass != "" {
+	if pass := viper.GetString("DATABASE_PASSWORD"); pass != "" {
 		cfg.Database.Password = pass
 	}
-	if name := viper.GetString("DB_NAME"); name != "" {
+	if name := viper.GetString("DATABASE_NAME"); name != "" {
 		cfg.Database.Name = name
 	}
 	
@@ -194,7 +195,7 @@ func overrideFromEnv(cfg *Config) {
 		cfg.Kafka.Brokers = strings.Split(brokers, ",")
 	}
 	
-	if servicePort := viper.GetInt("SERVICE_PORT"); servicePort != 0 {
+	if servicePort := viper.GetInt("SERVER_PORT"); servicePort != 0 {
 		cfg.Server.Port = servicePort
 	}
 }

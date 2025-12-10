@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/linkflow-go/internal/domain/user"
 	"github.com/linkflow-go/internal/services/auth/handlers"
 	"github.com/linkflow-go/internal/services/auth/jwt"
 	"github.com/linkflow-go/internal/services/auth/rbac"
@@ -37,6 +38,18 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
+	
+	// Auto-migrate database models
+	if err := db.AutoMigrate(
+		&user.User{},
+		&user.Role{},
+		&user.Permission{},
+		&user.Session{},
+		&user.OAuthToken{},
+	); err != nil {
+		return nil, fmt.Errorf("failed to migrate database: %w", err)
+	}
+	log.Info("Database migration completed")
 
 	// Initialize Redis
 	redisClient := redis.NewClient(&redis.Options{

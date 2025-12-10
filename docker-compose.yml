@@ -146,15 +146,21 @@ services:
       args:
         SERVICE_NAME: auth
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: linkflow
-      DB_USER: linkflow
-      DB_PASSWORD: linkflow123
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      KAFKA_BROKERS: kafka:29092
-      SERVICE_PORT: 8001
+      LINKFLOW_DB_HOST: postgres
+      LINKFLOW_DB_PORT: 5432
+      LINKFLOW_DB_NAME: linkflow
+      LINKFLOW_DB_USER: linkflow
+      LINKFLOW_DB_PASSWORD: linkflow123
+      LINKFLOW_REDIS_HOST: redis
+      LINKFLOW_REDIS_PORT: 6379
+      LINKFLOW_KAFKA_BROKERS: kafka:29092
+      LINKFLOW_SERVICE_PORT: 8001
+      LINKFLOW_DATABASE_HOST: postgres
+      LINKFLOW_DATABASE_PORT: 5432
+      LINKFLOW_DATABASE_NAME: linkflow
+      LINKFLOW_DATABASE_USER: linkflow
+      LINKFLOW_DATABASE_PASSWORD: linkflow123
+      LINKFLOW_SERVER_PORT: 8001
     ports:
       - "8001:8001"
     depends_on:
