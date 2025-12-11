@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/linkflow-go/internal/domain/user"
+	"github.com/linkflow-go/internal/services/auth/apikey"
 	"github.com/linkflow-go/internal/services/auth/handlers"
 	"github.com/linkflow-go/internal/services/auth/jwt"
 	"github.com/linkflow-go/internal/services/auth/rbac"
@@ -92,7 +93,7 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	authHandlers := handlers.NewAuthHandlers(authService, log)
 
 	// Setup HTTP server
-	router := setupRouter(authHandlers, jwtManager, redisClient, log)
+	router := setupRouter(authHandlers, jwtManager, redisClient, db, log)
 
 	httpServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
@@ -109,7 +110,7 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	}, nil
 }
 
-func setupRouter(h *handlers.AuthHandlers, jwtManager *jwt.Manager, redisClient *redis.Client, log logger.Logger) *gin.Engine {
+func setupRouter(h *handlers.AuthHandlers, jwtManager *jwt.Manager, redisClient *redis.Client, db *database.DB, log logger.Logger) *gin.Engine {
 	router := gin.New()
 
 	// Middleware
@@ -163,6 +164,11 @@ func setupRouter(h *handlers.AuthHandlers, jwtManager *jwt.Manager, redisClient 
 			protected.DELETE("/sessions/:sessionId", h.RevokeSession)
 			protected.DELETE("/sessions", h.RevokeAllSessions)
 			protected.POST("/validate", h.ValidateToken)
+
+			// API Key management endpoints
+			if db != nil {
+				apikey.SetupRoutes(protected, db.DB, log)
+			}
 
 			// RBAC endpoints (admin only)
 			rbac := protected.Group("/rbac")
