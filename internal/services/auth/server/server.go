@@ -38,7 +38,7 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
-	
+
 	// Auto-migrate database models
 	if err := db.AutoMigrate(
 		&user.User{},
@@ -93,7 +93,7 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 
 	// Setup HTTP server
 	router := setupRouter(authHandlers, jwtManager, redisClient, log)
-	
+
 	httpServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
 		Handler: router,
@@ -111,17 +111,17 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 
 func setupRouter(h *handlers.AuthHandlers, jwtManager *jwt.Manager, redisClient *redis.Client, log logger.Logger) *gin.Engine {
 	router := gin.New()
-	
+
 	// Middleware
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
 	router.Use(loggingMiddleware(log))
-	
+
 	// Health checks
 	router.GET("/health", h.Health)
 	router.GET("/ready", h.Ready)
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
-	
+
 	// Create rate limiter for login attempts
 	// Allow 5 attempts per 15 minutes, then block for 15 minutes
 	var loginRateLimiter ratelimit.RateLimiter
@@ -130,7 +130,7 @@ func setupRouter(h *handlers.AuthHandlers, jwtManager *jwt.Manager, redisClient 
 	} else {
 		loginRateLimiter = ratelimit.NewInMemoryRateLimiter(5, 15*time.Minute)
 	}
-	
+
 	// API routes
 	v1 := router.Group("/api/v1/auth")
 	{
@@ -141,14 +141,14 @@ func setupRouter(h *handlers.AuthHandlers, jwtManager *jwt.Manager, redisClient 
 		v1.POST("/verify-email", h.VerifyEmail)
 		v1.POST("/forgot-password", h.ForgotPassword)
 		v1.POST("/reset-password", h.ResetPassword)
-		
+
 		// OAuth routes
 		v1.GET("/oauth/:provider", h.OAuthLogin)
 		v1.GET("/oauth/:provider/callback", h.OAuthCallback)
-		
+
 		// Protected routes
 		protected := v1.Group("")
-		protected.Use(authMiddleware(jwtManager))
+		protected.Use(authMiddleware(jwtManager, redisClient))
 		{
 			protected.POST("/logout", h.Logout)
 			protected.GET("/me", h.GetCurrentUser)
@@ -157,13 +157,13 @@ func setupRouter(h *handlers.AuthHandlers, jwtManager *jwt.Manager, redisClient 
 			protected.POST("/2fa/setup", h.Setup2FA)
 			protected.POST("/2fa/verify", h.Verify2FA)
 			protected.DELETE("/2fa", h.Disable2FA)
-			
+
 			// Session management endpoints
 			protected.GET("/sessions", h.GetSessions)
 			protected.DELETE("/sessions/:sessionId", h.RevokeSession)
 			protected.DELETE("/sessions", h.RevokeAllSessions)
 			protected.POST("/validate", h.ValidateToken)
-			
+
 			// RBAC endpoints (admin only)
 			rbac := protected.Group("/rbac")
 			rbac.Use(RequireRole("admin", "super_admin"))
@@ -177,7 +177,7 @@ func setupRouter(h *handlers.AuthHandlers, jwtManager *jwt.Manager, redisClient 
 			}
 		}
 	}
-	
+
 	return router
 }
 
@@ -191,27 +191,27 @@ func (s *Server) Start() error {
 
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down server...")
-	
+
 	// Shutdown HTTP server
 	if err := s.httpServer.Shutdown(ctx); err != nil {
 		return fmt.Errorf("failed to shutdown HTTP server: %w", err)
 	}
-	
+
 	// Close event bus
 	if err := s.eventBus.Close(); err != nil {
 		s.logger.Error("Failed to close event bus", "error", err)
 	}
-	
+
 	// Close Redis
 	if err := s.redis.Close(); err != nil {
 		s.logger.Error("Failed to close Redis", "error", err)
 	}
-	
+
 	// Close database
 	if err := s.db.Close(); err != nil {
 		s.logger.Error("Failed to close database", "error", err)
 	}
-	
+
 	return nil
 }
 
@@ -262,7 +262,7 @@ func loggingMiddleware(log logger.Logger) gin.HandlerFunc {
 	}
 }
 
-func authMiddleware(jwtManager *jwt.Manager) gin.HandlerFunc {
+func authMiddleware(jwtManager *jwt.Manager, redisClient *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -280,7 +280,17 @@ func authMiddleware(jwtManager *jwt.Manager) gin.HandlerFunc {
 		}
 
 		token := authHeader[len(bearerScheme):]
-		
+
+		// Check if token is blacklisted (logged out)
+		if redisClient != nil {
+			blacklisted, _ := redisClient.Exists(c.Request.Context(), fmt.Sprintf("blacklist:%s", token)).Result()
+			if blacklisted > 0 {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "token has been revoked"})
+				c.Abort()
+				return
+			}
+		}
+
 		// Validate token
 		claims, err := jwtManager.ValidateToken(token)
 		if err != nil {
@@ -294,6 +304,7 @@ func authMiddleware(jwtManager *jwt.Manager) gin.HandlerFunc {
 		c.Set("email", claims.Email)
 		c.Set("roles", claims.Roles)
 		c.Set("permissions", claims.Permissions)
+		c.Set("token", token) // Store token for logout
 
 		c.Next()
 	}
@@ -308,14 +319,14 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		userRolesList, ok := userRoles.([]string)
 		if !ok {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid roles format"})
 			c.Abort()
 			return
 		}
-		
+
 		// Check if user has any of the required roles
 		hasRole := false
 		for _, requiredRole := range roles {
@@ -329,13 +340,13 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 				break
 			}
 		}
-		
+
 		if !hasRole {
 			c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions", "required": roles})
 			c.Abort()
 			return
 		}
-		
+
 		c.Next()
 	}
 }

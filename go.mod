@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	github.com/99designs/gqlgen v0.17.36
+	github.com/alicebob/miniredis/v2 v2.35.0
 	github.com/aws/aws-sdk-go v1.55.8
 	github.com/casbin/casbin/v2 v2.135.0
 	github.com/casbin/gorm-adapter/v3 v3.38.0
@@ -45,8 +46,10 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.22 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.10 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.10 // indirect
