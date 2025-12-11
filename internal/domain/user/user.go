@@ -1,6 +1,7 @@
 package user
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -8,22 +9,22 @@ import (
 )
 
 type User struct {
-	ID               string    `json:"id" gorm:"primaryKey"`
-	Email            string    `json:"email" gorm:"uniqueIndex;not null"`
-	Username         string    `json:"username" gorm:"uniqueIndex"`
-	Password         string    `json:"-" gorm:"not null"`
-	FirstName        string    `json:"firstName"`
-	LastName         string    `json:"lastName"`
-	Avatar           string    `json:"avatar"`
-	EmailVerified    bool      `json:"emailVerified" gorm:"default:false"`
-	EmailVerifyToken string    `json:"-"`
-	TwoFactorEnabled bool      `json:"twoFactorEnabled" gorm:"default:false"`
-	TwoFactorSecret  string    `json:"-"`
-	Status           string    `json:"status" gorm:"default:'active'"`
-	Roles            []Role    `json:"roles" gorm:"many2many:user_roles"`
+	ID               string     `json:"id" gorm:"primaryKey"`
+	Email            string     `json:"email" gorm:"uniqueIndex;not null"`
+	Username         string     `json:"username" gorm:"uniqueIndex"`
+	Password         string     `json:"-" gorm:"not null"`
+	FirstName        string     `json:"firstName"`
+	LastName         string     `json:"lastName"`
+	Avatar           string     `json:"avatar"`
+	EmailVerified    bool       `json:"emailVerified" gorm:"default:false"`
+	EmailVerifyToken string     `json:"-"`
+	TwoFactorEnabled bool       `json:"twoFactorEnabled" gorm:"default:false"`
+	TwoFactorSecret  string     `json:"-"`
+	Status           string     `json:"status" gorm:"default:'active'"`
+	Roles            []Role     `json:"roles" gorm:"many2many:user_roles"`
 	LastLoginAt      *time.Time `json:"lastLoginAt"`
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	UpdatedAt        time.Time  `json:"updatedAt"`
 }
 
 type Role struct {
@@ -77,8 +78,8 @@ const (
 
 // OAuth provider constants
 const (
-	ProviderGoogle   = "google"
-	ProviderGitHub   = "github"
+	ProviderGoogle    = "google"
+	ProviderGitHub    = "github"
 	ProviderMicrosoft = "microsoft"
 )
 
@@ -89,9 +90,13 @@ func NewUser(email, password, firstName, lastName string) (*User, error) {
 		return nil, err
 	}
 
+	// Generate username from email (part before @) + random suffix
+	username := strings.Split(email, "@")[0] + "-" + uuid.New().String()[:8]
+
 	return &User{
 		ID:               uuid.New().String(),
 		Email:            email,
+		Username:         username,
 		Password:         string(hashedPassword),
 		FirstName:        firstName,
 		LastName:         lastName,
@@ -157,7 +162,7 @@ func (u *User) GetPermissions() []string {
 			permMap[perm.Resource+":"+perm.Action] = true
 		}
 	}
-	
+
 	permissions := make([]string, 0, len(permMap))
 	for perm := range permMap {
 		permissions = append(permissions, perm)
