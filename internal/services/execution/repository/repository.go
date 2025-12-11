@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -70,7 +69,7 @@ func (r *ExecutionRepository) UpdateState(ctx context.Context, id string, newSta
 		}
 		
 		// Set timestamps based on state
-		switch newState {
+		switch workflow.ExecutionStatus(newState) {
 		case workflow.ExecutionRunning:
 			if execution.StartedAt.IsZero() {
 				now := time.Now()

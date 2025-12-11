@@ -268,13 +268,14 @@ func (t *ScheduleTrigger) ShouldFire(event interface{}) bool {
 	
 	// Parse cron expression
 	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-	schedule, err := parser.Parse(t.CronExpression)
+	_, err := parser.Parse(t.CronExpression)
 	if err != nil {
 		return false
 	}
 	
 	// Check if it's time to fire
 	// This is simplified - in production, you'd track last execution time
+	// TODO: Use the schedule to check actual timing
 	return true
 }
 

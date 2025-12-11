@@ -113,14 +113,7 @@ const (
 	StatusError    = "error"
 )
 
-// Execution status constants
-const (
-	ExecutionPending   = "pending"
-	ExecutionRunning   = "running"
-	ExecutionCompleted = "completed"
-	ExecutionFailed    = "failed"
-	ExecutionCancelled = "cancelled"
-)
+// Execution status constants are now defined in execution.go with ExecutionStatus type
 
 // Node types
 const (

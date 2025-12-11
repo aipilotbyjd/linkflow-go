@@ -6,7 +6,9 @@ set -e
 
 # Source environment variables
 if [ -f .env ]; then
-    export $(cat .env | grep -v '^#' | xargs)
+    set -o allexport
+    source .env
+    set +o allexport
 fi
 
 # Default values

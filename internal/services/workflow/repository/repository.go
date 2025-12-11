@@ -254,10 +254,6 @@ func (r *WorkflowRepository) ListWorkflows(ctx context.Context, opts ListWorkflo
 	
 	// Apply sorting
 	if opts.SortBy != "" {
-		order := "ASC"
-		if opts.SortDesc {
-			order = "DESC"
-		}
 		query = query.Order(clause.OrderByColumn{Column: clause.Column{Name: opts.SortBy}, Desc: opts.SortDesc})
 	} else {
 		query = query.Order("updated_at DESC")

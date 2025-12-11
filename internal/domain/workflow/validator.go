@@ -226,11 +226,11 @@ func (v *Validator) validateNodeConfigurations() {
 		// Validate node-specific parameters
 		switch node.Type {
 		case NodeTypeHTTPRequest:
-			v.validateHTTPNode(node)
+			v.validateHTTPNode(&node)
 		case NodeTypeDatabase:
-			v.validateDatabaseNode(node)
+			v.validateDatabaseNode(&node)
 		case NodeTypeEmail:
-			v.validateEmailNode(node)
+			v.validateEmailNode(&node)
 		}
 		
 		// Check timeout values
