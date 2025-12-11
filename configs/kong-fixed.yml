@@ -256,7 +256,7 @@ plugins:
   - name: correlation-id
     config:
       header_name: X-Request-Id
-      generator: uuid
+      generator: uuid#v4
       echo_downstream: true
 
   - name: prometheus
