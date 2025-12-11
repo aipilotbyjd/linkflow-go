@@ -25,6 +25,8 @@ go.work
 .env
 .env.local
 .env.*.local
+configs/kong.env
+configs/*.env
 
 # IDE specific files
 .idea/
