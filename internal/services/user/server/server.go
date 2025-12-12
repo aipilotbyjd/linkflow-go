@@ -64,7 +64,7 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 
 	// Setup HTTP server
 	router := setupRouter(userHandlers, log)
-	
+
 	httpServer := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
 		Handler:      router,
@@ -89,17 +89,21 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 
 func setupRouter(h *handlers.UserHandlers, log logger.Logger) *gin.Engine {
 	router := gin.New()
-	
+
 	// Middleware
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
 	router.Use(loggingMiddleware(log))
-	
+
 	// Health checks
 	router.GET("/health", h.Health)
 	router.GET("/ready", h.Ready)
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
-	
+
+	// OpenAPI/Swagger documentation
+	router.GET("/api/docs", serveSwaggerUI())
+	router.StaticFile("/api/openapi.yaml", "api/openapi/user.yaml")
+
 	// API routes
 	v1 := router.Group("/api/v1/users")
 	{
@@ -108,7 +112,7 @@ func setupRouter(h *handlers.UserHandlers, log logger.Logger) *gin.Engine {
 		v1.PUT("/:id", h.UpdateUser)
 		v1.DELETE("/:id", h.DeleteUser)
 		v1.GET("/:id/permissions", h.GetUserPermissions)
-		
+
 		// Team management
 		v1.POST("/teams", h.CreateTeam)
 		v1.GET("/teams", h.ListTeams)
@@ -117,7 +121,7 @@ func setupRouter(h *handlers.UserHandlers, log logger.Logger) *gin.Engine {
 		v1.DELETE("/teams/:id", h.DeleteTeam)
 		v1.POST("/teams/:id/members", h.AddTeamMember)
 		v1.DELETE("/teams/:id/members/:userId", h.RemoveTeamMember)
-		
+
 		// Role management
 		v1.GET("/roles", h.ListRoles)
 		v1.POST("/roles", h.CreateRole)
@@ -125,13 +129,13 @@ func setupRouter(h *handlers.UserHandlers, log logger.Logger) *gin.Engine {
 		v1.DELETE("/roles/:id", h.DeleteRole)
 		v1.POST("/roles/:id/assign", h.AssignRole)
 		v1.DELETE("/roles/:id/revoke", h.RevokeRole)
-		
+
 		// Permission management
 		v1.GET("/permissions", h.ListPermissions)
 		v1.POST("/permissions", h.CreatePermission)
 		v1.DELETE("/permissions/:id", h.DeletePermission)
 	}
-	
+
 	return router
 }
 
@@ -140,16 +144,16 @@ func subscribeToEvents(eventBus events.EventBus, service *service.UserService) e
 	if err := eventBus.Subscribe("user.registered", service.HandleUserRegistered); err != nil {
 		return err
 	}
-	
+
 	if err := eventBus.Subscribe("user.deleted", service.HandleUserDeleted); err != nil {
 		return err
 	}
-	
+
 	// Subscribe to workflow events for ownership tracking
 	if err := eventBus.Subscribe("workflow.created", service.HandleWorkflowCreated); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -163,27 +167,27 @@ func (s *Server) Start() error {
 
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down server...")
-	
+
 	// Shutdown HTTP server
 	if err := s.httpServer.Shutdown(ctx); err != nil {
 		return fmt.Errorf("failed to shutdown HTTP server: %w", err)
 	}
-	
+
 	// Close event bus
 	if err := s.eventBus.Close(); err != nil {
 		s.logger.Error("Failed to close event bus", "error", err)
 	}
-	
+
 	// Close Redis
 	if err := s.redis.Close(); err != nil {
 		s.logger.Error("Failed to close Redis", "error", err)
 	}
-	
+
 	// Close database
 	if err := s.db.Close(); err != nil {
 		s.logger.Error("Failed to close database", "error", err)
 	}
-	
+
 	return nil
 }
 
@@ -228,5 +232,39 @@ func loggingMiddleware(log logger.Logger) gin.HandlerFunc {
 			"latency", latency,
 			"ip", clientIP,
 		)
+	}
+}
+
+// serveSwaggerUI returns a handler that serves Swagger UI
+func serveSwaggerUI() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		html := `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkFlow User API - Swagger UI</title>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+    <style>body { margin: 0; padding: 0; } .topbar { display: none; }</style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script>
+        window.onload = function() {
+            SwaggerUIBundle({
+                url: "/api/openapi.yaml",
+                dom_id: '#swagger-ui',
+                presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+                layout: "BaseLayout",
+                deepLinking: true,
+                persistAuthorization: true
+            });
+        };
+    </script>
+</body>
+</html>`
+		c.Header("Content-Type", "text/html")
+		c.String(http.StatusOK, html)
 	}
 }

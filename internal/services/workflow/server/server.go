@@ -57,14 +57,14 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	workflowRepo := repository.NewWorkflowRepository(db)
 
 	// Initialize service
-	workflowService := service.NewWorkflowService(workflowRepo, eventBus, redisClient, log)
+	workflowService := service.NewWorkflowService(workflowRepo, eventBus, redisClient, log, db)
 
 	// Initialize handlers
 	workflowHandlers := handlers.NewWorkflowHandlers(workflowService, log)
 
 	// Setup HTTP server
 	router := setupRouter(workflowHandlers, log)
-	
+
 	httpServer := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
 		Handler:      router,
@@ -89,17 +89,17 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 
 func setupRouter(h *handlers.WorkflowHandlers, log logger.Logger) *gin.Engine {
 	router := gin.New()
-	
+
 	// Middleware
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
 	router.Use(loggingMiddleware(log))
-	
+
 	// Health checks
 	router.GET("/health", h.Health)
 	router.GET("/ready", h.Ready)
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
-	
+
 	// API routes
 	v1 := router.Group("/api/v1/workflows")
 	{
@@ -109,13 +109,13 @@ func setupRouter(h *handlers.WorkflowHandlers, log logger.Logger) *gin.Engine {
 		v1.POST("", h.CreateWorkflow)
 		v1.PUT("/:id", h.UpdateWorkflow)
 		v1.DELETE("/:id", h.DeleteWorkflow)
-		
+
 		// Workflow versions
 		v1.GET("/:id/versions", h.GetWorkflowVersions)
 		v1.GET("/:id/versions/:version", h.GetWorkflowVersion)
 		v1.POST("/:id/versions", h.CreateWorkflowVersion)
 		v1.POST("/:id/rollback/:version", h.RollbackWorkflowVersion)
-		
+
 		// Workflow operations
 		v1.POST("/:id/activate", h.ActivateWorkflow)
 		v1.POST("/:id/deactivate", h.DeactivateWorkflow)
@@ -123,37 +123,37 @@ func setupRouter(h *handlers.WorkflowHandlers, log logger.Logger) *gin.Engine {
 		v1.POST("/:id/validate", h.ValidateWorkflow)
 		v1.POST("/:id/execute", h.ExecuteWorkflow)
 		v1.POST("/:id/test", h.TestWorkflow)
-		
+
 		// Workflow sharing
 		v1.GET("/:id/permissions", h.GetWorkflowPermissions)
 		v1.POST("/:id/share", h.ShareWorkflow)
 		v1.DELETE("/:id/share/:userId", h.UnshareWorkflow)
 		v1.POST("/:id/publish", h.PublishWorkflow)
-		
+
 		// Workflow templates
 		v1.GET("/templates", h.ListTemplates)
 		v1.GET("/templates/:id", h.GetTemplate)
 		v1.POST("/templates", h.CreateTemplate)
 		v1.POST("/from-template/:templateId", h.CreateFromTemplate)
-		
+
 		// Workflow import/export
 		v1.POST("/import", h.ImportWorkflow)
 		v1.GET("/:id/export", h.ExportWorkflow)
-		
+
 		// Workflow statistics
 		v1.GET("/:id/stats", h.GetWorkflowStats)
 		v1.GET("/:id/executions", h.GetWorkflowExecutions)
 		v1.GET("/:id/runs/latest", h.GetLatestRun)
-		
+
 		// Workflow categories
 		v1.GET("/categories", h.ListCategories)
 		v1.POST("/categories", h.CreateCategory)
-		
+
 		// Search and filter
 		v1.GET("/search", h.SearchWorkflows)
 		v1.GET("/tags", h.GetPopularTags)
 	}
-	
+
 	return router
 }
 
@@ -162,16 +162,16 @@ func subscribeToEvents(eventBus events.EventBus, service *service.WorkflowServic
 	if err := eventBus.Subscribe("execution.completed", service.HandleExecutionCompleted); err != nil {
 		return err
 	}
-	
+
 	if err := eventBus.Subscribe("execution.failed", service.HandleExecutionFailed); err != nil {
 		return err
 	}
-	
+
 	// Subscribe to node events for workflow validation
 	if err := eventBus.Subscribe("node.updated", service.HandleNodeUpdated); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -185,27 +185,27 @@ func (s *Server) Start() error {
 
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down server...")
-	
+
 	// Shutdown HTTP server
 	if err := s.httpServer.Shutdown(ctx); err != nil {
 		return fmt.Errorf("failed to shutdown HTTP server: %w", err)
 	}
-	
+
 	// Close event bus
 	if err := s.eventBus.Close(); err != nil {
 		s.logger.Error("Failed to close event bus", "error", err)
 	}
-	
+
 	// Close Redis
 	if err := s.redis.Close(); err != nil {
 		s.logger.Error("Failed to close Redis", "error", err)
 	}
-	
+
 	// Close database
 	if err := s.db.Close(); err != nil {
 		s.logger.Error("Failed to close database", "error", err)
 	}
-	
+
 	return nil
 }
 

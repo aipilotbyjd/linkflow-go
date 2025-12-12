@@ -61,7 +61,7 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"user": user,
+		"user":    user,
 		"message": "Registration successful. Please verify your email.",
 	})
 }
@@ -69,18 +69,46 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 func (h *AuthHandlers) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request format",
+			"details": err.Error(),
+		})
 		return
 	}
 
 	tokens, user, err := h.service.Login(c.Request.Context(), req.Email, req.Password, c.ClientIP(), c.Request.UserAgent())
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid credentials") {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
-			return
+		errMsg := err.Error()
+
+		// Handle specific error cases with proper messages
+		switch {
+		case strings.Contains(errMsg, "invalid credentials"):
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":   "Invalid credentials",
+				"message": "The email or password you entered is incorrect",
+			})
+		case strings.Contains(errMsg, "email not verified"):
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":   "Email not verified",
+				"message": "Please verify your email address before logging in",
+			})
+		case strings.Contains(errMsg, "temporarily locked"):
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error":   "Account locked",
+				"message": "Your account has been temporarily locked due to too many failed login attempts. Please try again in 15 minutes.",
+			})
+		case strings.Contains(errMsg, "account is not active"):
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":   "Account inactive",
+				"message": "Your account is not active. Please contact support.",
+			})
+		default:
+			h.logger.Error("Failed to login", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Login failed",
+				"message": "An unexpected error occurred. Please try again later.",
+			})
 		}
-		h.logger.Error("Failed to login", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to login"})
 		return
 	}
 
@@ -139,7 +167,7 @@ func (h *AuthHandlers) GetCurrentUser(c *gin.Context) {
 
 func (h *AuthHandlers) UpdateProfile(c *gin.Context) {
 	userID := c.GetString("userId")
-	
+
 	var req map[string]interface{}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -158,7 +186,7 @@ func (h *AuthHandlers) UpdateProfile(c *gin.Context) {
 
 func (h *AuthHandlers) ChangePassword(c *gin.Context) {
 	userID := c.GetString("userId")
-	
+
 	var req ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -197,7 +225,7 @@ func (h *AuthHandlers) ForgotPassword(c *gin.Context) {
 	var req struct {
 		Email string `json:"email" binding:"required,email"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -218,7 +246,7 @@ func (h *AuthHandlers) ResetPassword(c *gin.Context) {
 		Token    string `json:"token" binding:"required"`
 		Password string `json:"password" binding:"required,min=8"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -234,7 +262,7 @@ func (h *AuthHandlers) ResetPassword(c *gin.Context) {
 
 func (h *AuthHandlers) OAuthLogin(c *gin.Context) {
 	provider := c.Param("provider")
-	
+
 	authURL, err := h.service.GetOAuthURL(provider)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid OAuth provider"})
@@ -247,7 +275,7 @@ func (h *AuthHandlers) OAuthLogin(c *gin.Context) {
 func (h *AuthHandlers) OAuthCallback(c *gin.Context) {
 	provider := c.Param("provider")
 	code := c.Query("code")
-	
+
 	if code == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Authorization code required"})
 		return
@@ -270,7 +298,7 @@ func (h *AuthHandlers) OAuthCallback(c *gin.Context) {
 
 func (h *AuthHandlers) Setup2FA(c *gin.Context) {
 	userID := c.GetString("userId")
-	
+
 	secret, qrCode, err := h.service.Setup2FA(c.Request.Context(), userID)
 	if err != nil {
 		h.logger.Error("Failed to setup 2FA", "error", err)
@@ -286,11 +314,11 @@ func (h *AuthHandlers) Setup2FA(c *gin.Context) {
 
 func (h *AuthHandlers) Verify2FA(c *gin.Context) {
 	userID := c.GetString("userId")
-	
+
 	var req struct {
 		Code string `json:"code" binding:"required"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -306,11 +334,11 @@ func (h *AuthHandlers) Verify2FA(c *gin.Context) {
 
 func (h *AuthHandlers) Disable2FA(c *gin.Context) {
 	userID := c.GetString("userId")
-	
+
 	var req struct {
 		Password string `json:"password" binding:"required"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -332,21 +360,21 @@ func (h *AuthHandlers) Disable2FA(c *gin.Context) {
 // Session management handlers
 func (h *AuthHandlers) GetSessions(c *gin.Context) {
 	userID := c.GetString("userId")
-	
+
 	sessions, err := h.service.GetUserSessions(c.Request.Context(), userID)
 	if err != nil {
 		h.logger.Error("Failed to get user sessions", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get sessions"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"sessions": sessions})
 }
 
 func (h *AuthHandlers) RevokeSession(c *gin.Context) {
 	userID := c.GetString("userId")
 	sessionID := c.Param("sessionId")
-	
+
 	if err := h.service.RevokeSession(c.Request.Context(), userID, sessionID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
@@ -360,19 +388,19 @@ func (h *AuthHandlers) RevokeSession(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke session"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "Session revoked successfully"})
 }
 
 func (h *AuthHandlers) RevokeAllSessions(c *gin.Context) {
 	userID := c.GetString("userId")
-	
+
 	if err := h.service.RevokeAllSessions(c.Request.Context(), userID); err != nil {
 		h.logger.Error("Failed to revoke all sessions", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke sessions"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "All sessions revoked successfully"})
 }
 
@@ -382,15 +410,15 @@ func (h *AuthHandlers) ValidateToken(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Token required"})
 		return
 	}
-	
+
 	session, err := h.service.ValidateSession(c.Request.Context(), token)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
-		"valid": true,
+		"valid":   true,
 		"session": session,
 	})
 }
@@ -398,16 +426,16 @@ func (h *AuthHandlers) ValidateToken(c *gin.Context) {
 // RBAC handlers
 func (h *AuthHandlers) AssignRole(c *gin.Context) {
 	userID := c.Param("userId")
-	
+
 	var req struct {
 		Role string `json:"role" binding:"required"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	if err := h.service.AssignRole(c.Request.Context(), userID, req.Role); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
@@ -417,14 +445,14 @@ func (h *AuthHandlers) AssignRole(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign role"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "Role assigned successfully"})
 }
 
 func (h *AuthHandlers) RemoveRole(c *gin.Context) {
 	userID := c.Param("userId")
 	role := c.Param("role")
-	
+
 	if err := h.service.RemoveRole(c.Request.Context(), userID, role); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
@@ -434,13 +462,13 @@ func (h *AuthHandlers) RemoveRole(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove role"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "Role removed successfully"})
 }
 
 func (h *AuthHandlers) GetUserRoles(c *gin.Context) {
 	userID := c.Param("userId")
-	
+
 	roles, err := h.service.GetUserRoles(c.Request.Context(), userID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -451,7 +479,7 @@ func (h *AuthHandlers) GetUserRoles(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user roles"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"roles": roles})
 }
 
@@ -462,14 +490,14 @@ func (h *AuthHandlers) GetAllRoles(c *gin.Context) {
 
 func (h *AuthHandlers) GetUsersForRole(c *gin.Context) {
 	role := c.Param("role")
-	
+
 	users, err := h.service.GetUsersForRole(c.Request.Context(), role)
 	if err != nil {
 		h.logger.Error("Failed to get users for role", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get users"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"users": users})
 }
 
@@ -479,31 +507,31 @@ func (h *AuthHandlers) CheckPermission(c *gin.Context) {
 		Resource string `json:"resource" binding:"required"`
 		Action   string `json:"action" binding:"required"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	allowed, err := h.service.CheckPermission(c.Request.Context(), req.UserID, req.Resource, req.Action)
 	if err != nil {
 		h.logger.Error("Failed to check permission", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check permission"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
-		"allowed": allowed,
-		"userId": req.UserID,
+		"allowed":  allowed,
+		"userId":   req.UserID,
 		"resource": req.Resource,
-		"action": req.Action,
+		"action":   req.Action,
 	})
 }
 
 // Health check handlers
 func (h *AuthHandlers) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"status": "healthy",
+		"status":  "healthy",
 		"service": "auth-service",
 	})
 }
@@ -513,13 +541,13 @@ func (h *AuthHandlers) Ready(c *gin.Context) {
 	if err := h.service.CheckReadiness(c.Request.Context()); err != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"status": "not ready",
-			"error": err.Error(),
+			"error":  err.Error(),
 		})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
-		"status": "ready",
+		"status":  "ready",
 		"service": "auth-service",
 	})
 }

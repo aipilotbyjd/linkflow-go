@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/linkflow-go/internal/domain/workflow"
 	"github.com/linkflow-go/pkg/database"
 	"github.com/linkflow-go/pkg/events"
@@ -29,51 +28,51 @@ var (
 
 // TriggerManager manages workflow triggers
 type TriggerManager struct {
-	db           *database.DB
-	redis        *redis.Client
-	eventBus     events.EventBus
-	logger       logger.Logger
-	factory      *workflow.TriggerFactory
+	db            *database.DB
+	redis         *redis.Client
+	eventBus      events.EventBus
+	logger        logger.Logger
+	factory       *workflow.TriggerFactory
 	cronScheduler *cron.Cron
-	webhooks     map[string]*workflow.WebhookTrigger
-	schedules    map[string]*cron.EntryID
-	mu           sync.RWMutex
-	shutdownCh   chan struct{}
+	webhooks      map[string]*workflow.WebhookTrigger
+	schedules     map[string]*cron.EntryID
+	mu            sync.RWMutex
+	shutdownCh    chan struct{}
 }
 
 // NewTriggerManager creates a new trigger manager
 func NewTriggerManager(db *database.DB, redis *redis.Client, eventBus events.EventBus, logger logger.Logger) *TriggerManager {
 	return &TriggerManager{
-		db:           db,
-		redis:        redis,
-		eventBus:     eventBus,
-		logger:       logger,
-		factory:      workflow.NewTriggerFactory(),
+		db:            db,
+		redis:         redis,
+		eventBus:      eventBus,
+		logger:        logger,
+		factory:       workflow.NewTriggerFactory(),
 		cronScheduler: cron.New(cron.WithLocation(time.UTC)),
-		webhooks:     make(map[string]*workflow.WebhookTrigger),
-		schedules:    make(map[string]*cron.EntryID),
-		shutdownCh:   make(chan struct{}),
+		webhooks:      make(map[string]*workflow.WebhookTrigger),
+		schedules:     make(map[string]*cron.EntryID),
+		shutdownCh:    make(chan struct{}),
 	}
 }
 
 // Start starts the trigger manager
 func (tm *TriggerManager) Start(ctx context.Context) error {
 	tm.logger.Info("Starting trigger manager")
-	
+
 	// Start cron scheduler
 	tm.cronScheduler.Start()
-	
+
 	// Load active triggers
 	if err := tm.loadActiveTriggers(ctx); err != nil {
 		return fmt.Errorf("failed to load active triggers: %w", err)
 	}
-	
+
 	// Start event listener
 	go tm.eventListener(ctx)
-	
+
 	// Start webhook server (would be separate in production)
 	go tm.webhookListener(ctx)
-	
+
 	tm.logger.Info("Trigger manager started")
 	return nil
 }
@@ -81,18 +80,18 @@ func (tm *TriggerManager) Start(ctx context.Context) error {
 // Stop stops the trigger manager
 func (tm *TriggerManager) Stop(ctx context.Context) error {
 	tm.logger.Info("Stopping trigger manager")
-	
+
 	close(tm.shutdownCh)
-	
+
 	// Stop cron scheduler
 	tm.cronScheduler.Stop()
-	
+
 	// Clear active triggers
 	tm.mu.Lock()
 	tm.webhooks = make(map[string]*workflow.WebhookTrigger)
 	tm.schedules = make(map[string]*cron.EntryID)
 	tm.mu.Unlock()
-	
+
 	tm.logger.Info("Trigger manager stopped")
 	return nil
 }
@@ -101,35 +100,35 @@ func (tm *TriggerManager) Stop(ctx context.Context) error {
 func (tm *TriggerManager) CreateTrigger(ctx context.Context, workflowID string, config map[string]interface{}) (*workflow.WorkflowTrigger, error) {
 	// Add workflow ID to config
 	config["workflowId"] = workflowID
-	
+
 	// Get trigger type
 	triggerType, ok := config["type"].(string)
 	if !ok {
 		return nil, ErrInvalidTriggerType
 	}
-	
+
 	// Create trigger instance
 	trigger, err := tm.factory.CreateTrigger(triggerType, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create trigger: %w", err)
 	}
-	
+
 	// Validate trigger
 	if err := trigger.Validate(); err != nil {
 		return nil, fmt.Errorf("trigger validation failed: %w", err)
 	}
-	
+
 	// Check for duplicates
 	if err := tm.checkDuplicateTrigger(ctx, workflowID, triggerType, config); err != nil {
 		return nil, err
 	}
-	
+
 	// Convert config to JSON
 	configJSON, err := json.Marshal(trigger.GetConfig())
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal config: %w", err)
 	}
-	
+
 	// Create database record
 	wt := &workflow.WorkflowTrigger{
 		ID:          trigger.GetID(),
@@ -142,24 +141,24 @@ func (tm *TriggerManager) CreateTrigger(ctx context.Context, workflowID string, 
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
-	
+
 	// Save to database
 	if err := tm.db.WithContext(ctx).Create(wt).Error; err != nil {
 		return nil, fmt.Errorf("failed to save trigger: %w", err)
 	}
-	
+
 	// Publish trigger created event
 	tm.publishEvent(ctx, "trigger.created", map[string]interface{}{
 		"trigger_id":  wt.ID,
 		"workflow_id": workflowID,
 		"type":        triggerType,
 	})
-	
-	tm.logger.Info("Trigger created", 
+
+	tm.logger.Info("Trigger created",
 		"trigger_id", wt.ID,
 		"workflow_id", workflowID,
 		"type", triggerType)
-	
+
 	return wt, nil
 }
 
@@ -190,56 +189,56 @@ func (tm *TriggerManager) UpdateTrigger(ctx context.Context, triggerID string, u
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Parse existing config
 	var config map[string]interface{}
 	if err := json.Unmarshal(trigger.Config, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
-	
+
 	// Merge updates
 	for key, value := range updates {
 		if key != "id" && key != "workflowId" && key != "type" {
 			config[key] = value
 		}
 	}
-	
+
 	// Create and validate updated trigger
 	updatedTrigger, err := tm.factory.CreateTrigger(trigger.Type, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create updated trigger: %w", err)
 	}
-	
+
 	if err := updatedTrigger.Validate(); err != nil {
 		return nil, fmt.Errorf("trigger validation failed: %w", err)
 	}
-	
+
 	// Update config
 	configJSON, err := json.Marshal(updatedTrigger.GetConfig())
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal config: %w", err)
 	}
-	
+
 	// Update database
 	trigger.Config = configJSON
 	trigger.UpdatedAt = time.Now()
-	
+
 	if err := tm.db.WithContext(ctx).Save(trigger).Error; err != nil {
 		return nil, fmt.Errorf("failed to update trigger: %w", err)
 	}
-	
+
 	// If trigger is active, reload it
 	if trigger.Status == workflow.TriggerStatusActive {
 		tm.deactivateTrigger(ctx, trigger)
 		tm.activateTrigger(ctx, trigger)
 	}
-	
+
 	// Publish event
 	tm.publishEvent(ctx, "trigger.updated", map[string]interface{}{
 		"trigger_id":  triggerID,
 		"workflow_id": trigger.WorkflowID,
 	})
-	
+
 	return trigger, nil
 }
 
@@ -250,25 +249,25 @@ func (tm *TriggerManager) DeleteTrigger(ctx context.Context, triggerID string) e
 	if err != nil {
 		return err
 	}
-	
+
 	// Deactivate if active
 	if trigger.Status == workflow.TriggerStatusActive {
 		if err := tm.DeactivateTrigger(ctx, triggerID); err != nil {
 			return fmt.Errorf("failed to deactivate trigger: %w", err)
 		}
 	}
-	
+
 	// Delete from database
 	if err := tm.db.WithContext(ctx).Delete(&workflow.WorkflowTrigger{}, "id = ?", triggerID).Error; err != nil {
 		return fmt.Errorf("failed to delete trigger: %w", err)
 	}
-	
+
 	// Publish event
 	tm.publishEvent(ctx, "trigger.deleted", map[string]interface{}{
 		"trigger_id":  triggerID,
 		"workflow_id": trigger.WorkflowID,
 	})
-	
+
 	tm.logger.Info("Trigger deleted", "trigger_id", triggerID)
 	return nil
 }
@@ -280,31 +279,31 @@ func (tm *TriggerManager) ActivateTrigger(ctx context.Context, triggerID string)
 	if err != nil {
 		return err
 	}
-	
+
 	// Check if already active
 	if trigger.Status == workflow.TriggerStatusActive {
 		return ErrTriggerAlreadyActive
 	}
-	
+
 	// Activate based on type
 	if err := tm.activateTrigger(ctx, trigger); err != nil {
 		return fmt.Errorf("failed to activate trigger: %w", err)
 	}
-	
+
 	// Update status
 	trigger.Status = workflow.TriggerStatusActive
 	trigger.UpdatedAt = time.Now()
-	
+
 	if err := tm.db.WithContext(ctx).Save(trigger).Error; err != nil {
 		return fmt.Errorf("failed to update trigger status: %w", err)
 	}
-	
+
 	// Publish event
 	tm.publishEvent(ctx, "trigger.activated", map[string]interface{}{
 		"trigger_id":  triggerID,
 		"workflow_id": trigger.WorkflowID,
 	})
-	
+
 	tm.logger.Info("Trigger activated", "trigger_id", triggerID, "type", trigger.Type)
 	return nil
 }
@@ -316,31 +315,31 @@ func (tm *TriggerManager) DeactivateTrigger(ctx context.Context, triggerID strin
 	if err != nil {
 		return err
 	}
-	
+
 	// Check if active
 	if trigger.Status != workflow.TriggerStatusActive {
 		return ErrTriggerNotActive
 	}
-	
+
 	// Deactivate based on type
 	if err := tm.deactivateTrigger(ctx, trigger); err != nil {
 		return fmt.Errorf("failed to deactivate trigger: %w", err)
 	}
-	
+
 	// Update status
 	trigger.Status = workflow.TriggerStatusInactive
 	trigger.UpdatedAt = time.Now()
-	
+
 	if err := tm.db.WithContext(ctx).Save(trigger).Error; err != nil {
 		return fmt.Errorf("failed to update trigger status: %w", err)
 	}
-	
+
 	// Publish event
 	tm.publishEvent(ctx, "trigger.deactivated", map[string]interface{}{
 		"trigger_id":  triggerID,
 		"workflow_id": trigger.WorkflowID,
 	})
-	
+
 	tm.logger.Info("Trigger deactivated", "trigger_id", triggerID, "type", trigger.Type)
 	return nil
 }
@@ -352,22 +351,22 @@ func (tm *TriggerManager) TestTrigger(ctx context.Context, triggerID string, tes
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Parse config
 	var config map[string]interface{}
 	if err := json.Unmarshal(trigger.Config, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
-	
+
 	// Create trigger instance
 	triggerInstance, err := tm.factory.CreateTrigger(trigger.Type, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create trigger instance: %w", err)
 	}
-	
+
 	// Test trigger
 	shouldFire := triggerInstance.ShouldFire(testData)
-	
+
 	result := map[string]interface{}{
 		"trigger_id":   triggerID,
 		"would_fire":   shouldFire,
@@ -375,12 +374,12 @@ func (tm *TriggerManager) TestTrigger(ctx context.Context, triggerID string, tes
 		"trigger_type": trigger.Type,
 		"config":       config,
 	}
-	
+
 	// Log test
 	tm.logger.Info("Trigger tested",
 		"trigger_id", triggerID,
 		"would_fire", shouldFire)
-	
+
 	return result, nil
 }
 
@@ -390,7 +389,7 @@ func (tm *TriggerManager) activateTrigger(ctx context.Context, trigger *workflow
 	if err := json.Unmarshal(trigger.Config, &config); err != nil {
 		return err
 	}
-	
+
 	switch trigger.Type {
 	case workflow.TriggerTypeWebhook:
 		return tm.activateWebhookTrigger(trigger, config)
@@ -431,18 +430,18 @@ func (tm *TriggerManager) deactivateTrigger(ctx context.Context, trigger *workfl
 func (tm *TriggerManager) activateWebhookTrigger(trigger *workflow.WorkflowTrigger, config map[string]interface{}) error {
 	webhook := workflow.NewWebhookTrigger(trigger.WorkflowID, trigger.Name, config["path"].(string))
 	webhook.ID = trigger.ID
-	
+
 	if method, ok := config["method"].(string); ok {
 		webhook.Method = method
 	}
 	if secret, ok := config["secret"].(string); ok {
 		webhook.Secret = secret
 	}
-	
+
 	tm.mu.Lock()
 	tm.webhooks[trigger.ID] = webhook
 	tm.mu.Unlock()
-	
+
 	// Register webhook endpoint (in production, this would be done via HTTP router)
 	return nil
 }
@@ -458,20 +457,20 @@ func (tm *TriggerManager) deactivateWebhookTrigger(triggerID string) error {
 // activateScheduleTrigger activates a schedule trigger
 func (tm *TriggerManager) activateScheduleTrigger(trigger *workflow.WorkflowTrigger, config map[string]interface{}) error {
 	cronExpr := config["cronExpression"].(string)
-	
+
 	// Add cron job
 	entryID, err := tm.cronScheduler.AddFunc(cronExpr, func() {
 		tm.fireScheduleTrigger(trigger.ID, trigger.WorkflowID)
 	})
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to add cron job: %w", err)
 	}
-	
+
 	tm.mu.Lock()
 	tm.schedules[trigger.ID] = &entryID
 	tm.mu.Unlock()
-	
+
 	return nil
 }
 
@@ -490,7 +489,7 @@ func (tm *TriggerManager) deactivateScheduleTrigger(triggerID string) error {
 func (tm *TriggerManager) activateEventTrigger(trigger *workflow.WorkflowTrigger, config map[string]interface{}) error {
 	// Subscribe to event bus
 	eventType := config["eventType"].(string)
-	
+
 	// Store subscription in Redis
 	key := fmt.Sprintf("trigger:event:%s:%s", eventType, trigger.ID)
 	data, _ := json.Marshal(map[string]interface{}{
@@ -498,7 +497,7 @@ func (tm *TriggerManager) activateEventTrigger(trigger *workflow.WorkflowTrigger
 		"workflow_id": trigger.WorkflowID,
 		"config":      config,
 	})
-	
+
 	return tm.redis.Set(context.Background(), key, string(data), 0).Err()
 }
 
@@ -507,11 +506,11 @@ func (tm *TriggerManager) deactivateEventTrigger(triggerID string) error {
 	// Remove subscription from Redis
 	pattern := fmt.Sprintf("trigger:event:*:%s", triggerID)
 	keys := tm.redis.Keys(context.Background(), pattern).Val()
-	
+
 	for _, key := range keys {
 		tm.redis.Del(context.Background(), key)
 	}
-	
+
 	return nil
 }
 
@@ -524,7 +523,7 @@ func (tm *TriggerManager) activateEmailTrigger(trigger *workflow.WorkflowTrigger
 		"workflow_id": trigger.WorkflowID,
 		"config":      config,
 	})
-	
+
 	return tm.redis.Set(context.Background(), key, string(data), 0).Err()
 }
 
@@ -537,7 +536,7 @@ func (tm *TriggerManager) deactivateEmailTrigger(triggerID string) error {
 // fireScheduleTrigger fires a schedule trigger
 func (tm *TriggerManager) fireScheduleTrigger(triggerID, workflowID string) {
 	ctx := context.Background()
-	
+
 	// Update last fired time
 	tm.db.Model(&workflow.WorkflowTrigger{}).
 		Where("id = ?", triggerID).
@@ -545,7 +544,7 @@ func (tm *TriggerManager) fireScheduleTrigger(triggerID, workflowID string) {
 			"last_fired": time.Now(),
 			"fire_count": gorm.Expr("fire_count + 1"),
 		})
-	
+
 	// Publish execution event
 	tm.publishEvent(ctx, "trigger.fired", map[string]interface{}{
 		"trigger_id":  triggerID,
@@ -553,7 +552,7 @@ func (tm *TriggerManager) fireScheduleTrigger(triggerID, workflowID string) {
 		"type":        workflow.TriggerTypeSchedule,
 		"data":        map[string]interface{}{"scheduled_time": time.Now()},
 	})
-	
+
 	tm.logger.Info("Schedule trigger fired", "trigger_id", triggerID, "workflow_id", workflowID)
 }
 
@@ -563,11 +562,11 @@ func (tm *TriggerManager) loadActiveTriggers(ctx context.Context) error {
 	err := tm.db.WithContext(ctx).
 		Where("status = ?", workflow.TriggerStatusActive).
 		Find(&triggers).Error
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	for _, trigger := range triggers {
 		if err := tm.activateTrigger(ctx, trigger); err != nil {
 			tm.logger.Error("Failed to load active trigger",
@@ -576,7 +575,7 @@ func (tm *TriggerManager) loadActiveTriggers(ctx context.Context) error {
 			// Continue loading other triggers
 		}
 	}
-	
+
 	tm.logger.Info("Loaded active triggers", "count", len(triggers))
 	return nil
 }
@@ -599,28 +598,28 @@ func (tm *TriggerManager) checkDuplicateTrigger(ctx context.Context, workflowID,
 	case workflow.TriggerTypeWebhook:
 		path, _ := config["path"].(string)
 		method, _ := config["method"].(string)
-		
+
 		var count int64
 		tm.db.Model(&workflow.WorkflowTrigger{}).
 			Where("workflow_id = ? AND type = ?", workflowID, triggerType).
 			Where("config->>'path' = ? AND config->>'method' = ?", path, method).
 			Count(&count)
-		
+
 		if count > 0 {
 			return ErrDuplicateTrigger
 		}
 	}
-	
+
 	return nil
 }
 
 // publishEvent publishes an event to the event bus
 func (tm *TriggerManager) publishEvent(ctx context.Context, eventType string, data map[string]interface{}) {
 	event := events.Event{
-		Type: eventType,
-		Data: data,
+		Type:    eventType,
+		Payload: data,
 	}
-	
+
 	if err := tm.eventBus.Publish(ctx, event); err != nil {
 		tm.logger.Warn("Failed to publish event",
 			"type", eventType,

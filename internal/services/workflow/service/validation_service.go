@@ -28,44 +28,44 @@ func NewValidationService(redis *redis.Client, logger logger.Logger) *Validation
 func (vs *ValidationService) ValidateWorkflow(ctx context.Context, wf *workflow.Workflow) ([]string, []string, error) {
 	startTime := time.Now()
 	defer func() {
-		vs.logger.Info("Workflow validation completed", 
+		vs.logger.Info("Workflow validation completed",
 			"workflow_id", wf.ID,
 			"duration_ms", time.Since(startTime).Milliseconds())
 	}()
-	
+
 	// Check cache for recent validation results
 	cacheKey := fmt.Sprintf("validation:%s:v%d", wf.ID, wf.Version)
 	if cached, err := vs.getValidationCache(ctx, cacheKey); err == nil && cached != nil {
 		vs.logger.Debug("Using cached validation result", "workflow_id", wf.ID)
 		return cached.Errors, cached.Warnings, nil
 	}
-	
+
 	// Create validator
 	validator := workflow.NewValidator(wf)
-	
+
 	// Perform validation
 	errors, warnings, err := validator.Validate()
-	
+
 	// Log validation results
 	if err != nil {
-		vs.logger.Error("Workflow validation failed", 
+		vs.logger.Error("Workflow validation failed",
 			"workflow_id", wf.ID,
 			"errors", len(errors),
 			"warnings", len(warnings),
 			"error", err)
 	} else {
-		vs.logger.Info("Workflow validation passed", 
+		vs.logger.Info("Workflow validation passed",
 			"workflow_id", wf.ID,
 			"warnings", len(warnings))
 	}
-	
+
 	// Cache validation results
 	vs.cacheValidationResult(ctx, cacheKey, &ValidationResult{
 		Errors:   errors,
 		Warnings: warnings,
 		Valid:    err == nil,
 	})
-	
+
 	return errors, warnings, err
 }
 
@@ -73,19 +73,19 @@ func (vs *ValidationService) ValidateWorkflow(ctx context.Context, wf *workflow.
 func (vs *ValidationService) ValidateDAG(ctx context.Context, wf *workflow.Workflow) error {
 	// Create DAG
 	dag := workflow.NewDAG(wf)
-	
+
 	// Validate DAG structure
 	if err := dag.Validate(); err != nil {
-		vs.logger.Error("DAG validation failed", 
+		vs.logger.Error("DAG validation failed",
 			"workflow_id", wf.ID,
 			"error", err)
 		return err
 	}
-	
+
 	// Log DAG statistics
 	topOrder, _ := dag.GetTopologicalOrder()
 	criticalPath := dag.GetCriticalPath()
-	
+
 	vs.logger.Info("DAG validation successful",
 		"workflow_id", wf.ID,
 		"nodes", len(dag.Nodes),
@@ -93,14 +93,14 @@ func (vs *ValidationService) ValidateDAG(ctx context.Context, wf *workflow.Workf
 		"end_nodes", len(dag.EndNodes),
 		"topological_order", len(topOrder),
 		"critical_path_length", len(criticalPath))
-	
+
 	return nil
 }
 
 // ValidateNode validates a single node configuration
 func (vs *ValidationService) ValidateNode(ctx context.Context, node *workflow.Node) []string {
 	errors := []string{}
-	
+
 	// Validate node type
 	validTypes := map[string]bool{
 		workflow.NodeTypeTrigger:     true,
@@ -116,11 +116,11 @@ func (vs *ValidationService) ValidateNode(ctx context.Context, node *workflow.No
 		workflow.NodeTypeEmail:       true,
 		workflow.NodeTypeSlack:       true,
 	}
-	
+
 	if !validTypes[node.Type] {
 		errors = append(errors, fmt.Sprintf("Invalid node type: %s", node.Type))
 	}
-	
+
 	// Validate node-specific parameters
 	switch node.Type {
 	case workflow.NodeTypeHTTPRequest:
@@ -134,29 +134,29 @@ func (vs *ValidationService) ValidateNode(ctx context.Context, node *workflow.No
 	case workflow.NodeTypeCode:
 		errors = append(errors, vs.validateCodeNode(node)...)
 	}
-	
+
 	return errors
 }
 
 // validateHTTPNode validates HTTP request node parameters
 func (vs *ValidationService) validateHTTPNode(node *workflow.Node) []string {
 	errors := []string{}
-	
+
 	if node.Parameters == nil {
 		return []string{"HTTP node missing parameters"}
 	}
-	
+
 	// Check required fields
 	if _, ok := node.Parameters["url"]; !ok {
 		errors = append(errors, "HTTP node missing 'url' parameter")
 	}
-	
+
 	if _, ok := node.Parameters["method"]; !ok {
 		errors = append(errors, "HTTP node missing 'method' parameter")
 	} else {
 		method := node.Parameters["method"]
 		validMethods := map[string]bool{
-			"GET": true, "POST": true, "PUT": true, 
+			"GET": true, "POST": true, "PUT": true,
 			"DELETE": true, "PATCH": true, "HEAD": true,
 		}
 		if methodStr, ok := method.(string); ok {
@@ -165,7 +165,7 @@ func (vs *ValidationService) validateHTTPNode(node *workflow.Node) []string {
 			}
 		}
 	}
-	
+
 	// Validate timeout if present
 	if timeout, ok := node.Parameters["timeout"]; ok {
 		if timeoutInt, ok := timeout.(int); ok {
@@ -174,18 +174,18 @@ func (vs *ValidationService) validateHTTPNode(node *workflow.Node) []string {
 			}
 		}
 	}
-	
+
 	return errors
 }
 
 // validateDatabaseNode validates database node parameters
 func (vs *ValidationService) validateDatabaseNode(node *workflow.Node) []string {
 	errors := []string{}
-	
+
 	if node.Parameters == nil {
 		return []string{"Database node missing parameters"}
 	}
-	
+
 	// Check required fields
 	requiredFields := []string{"operation", "table"}
 	for _, field := range requiredFields {
@@ -193,11 +193,11 @@ func (vs *ValidationService) validateDatabaseNode(node *workflow.Node) []string 
 			errors = append(errors, fmt.Sprintf("Database node missing '%s' parameter", field))
 		}
 	}
-	
+
 	// Validate operation type
 	if op, ok := node.Parameters["operation"]; ok {
 		validOps := map[string]bool{
-			"select": true, "insert": true, "update": true, 
+			"select": true, "insert": true, "update": true,
 			"delete": true, "upsert": true,
 		}
 		if opStr, ok := op.(string); ok {
@@ -206,18 +206,18 @@ func (vs *ValidationService) validateDatabaseNode(node *workflow.Node) []string 
 			}
 		}
 	}
-	
+
 	return errors
 }
 
 // validateEmailNode validates email node parameters
 func (vs *ValidationService) validateEmailNode(node *workflow.Node) []string {
 	errors := []string{}
-	
+
 	if node.Parameters == nil {
 		return []string{"Email node missing parameters"}
 	}
-	
+
 	// Check required fields
 	requiredFields := []string{"to", "subject"}
 	for _, field := range requiredFields {
@@ -225,7 +225,7 @@ func (vs *ValidationService) validateEmailNode(node *workflow.Node) []string {
 			errors = append(errors, fmt.Sprintf("Email node missing '%s' parameter", field))
 		}
 	}
-	
+
 	// Validate email format if present
 	if to, ok := node.Parameters["to"]; ok {
 		if toStr, ok := to.(string); ok {
@@ -235,43 +235,43 @@ func (vs *ValidationService) validateEmailNode(node *workflow.Node) []string {
 			}
 		}
 	}
-	
+
 	return errors
 }
 
 // validateSlackNode validates Slack node parameters
 func (vs *ValidationService) validateSlackNode(node *workflow.Node) []string {
 	errors := []string{}
-	
+
 	if node.Parameters == nil {
 		return []string{"Slack node missing parameters"}
 	}
-	
+
 	// Check required fields
 	if _, ok := node.Parameters["channel"]; !ok {
 		errors = append(errors, "Slack node missing 'channel' parameter")
 	}
-	
+
 	if _, ok := node.Parameters["message"]; !ok {
 		errors = append(errors, "Slack node missing 'message' parameter")
 	}
-	
+
 	return errors
 }
 
 // validateCodeNode validates code execution node parameters
 func (vs *ValidationService) validateCodeNode(node *workflow.Node) []string {
 	errors := []string{}
-	
+
 	if node.Parameters == nil {
 		return []string{"Code node missing parameters"}
 	}
-	
+
 	// Check required fields
 	if _, ok := node.Parameters["code"]; !ok {
 		errors = append(errors, "Code node missing 'code' parameter")
 	}
-	
+
 	// Check language if specified
 	if lang, ok := node.Parameters["language"]; ok {
 		validLangs := map[string]bool{
@@ -283,7 +283,7 @@ func (vs *ValidationService) validateCodeNode(node *workflow.Node) []string {
 			}
 		}
 	}
-	
+
 	return errors
 }
 
@@ -296,12 +296,12 @@ func (vs *ValidationService) ValidateConnection(source, target *workflow.Node, c
 			return fmt.Errorf("merge node can only use 'output' port")
 		}
 	}
-	
+
 	// Check if target can have inputs
 	if target.Type == workflow.NodeTypeTrigger {
 		return fmt.Errorf("trigger nodes cannot have incoming connections")
 	}
-	
+
 	// Validate split node outputs
 	if source.Type == workflow.NodeTypeSplit {
 		validPorts := map[string]bool{"true": true, "false": true, "output": true}
@@ -309,7 +309,7 @@ func (vs *ValidationService) ValidateConnection(source, target *workflow.Node, c
 			return fmt.Errorf("split node has invalid output port: %s", conn.SourcePort)
 		}
 	}
-	
+
 	// Validate condition node outputs
 	if source.Type == workflow.NodeTypeCondition {
 		validPorts := map[string]bool{"true": true, "false": true}
@@ -317,29 +317,29 @@ func (vs *ValidationService) ValidateConnection(source, target *workflow.Node, c
 			return fmt.Errorf("condition node has invalid output port: %s", conn.SourcePort)
 		}
 	}
-	
+
 	return nil
 }
 
 // GetExecutionOrder returns the order in which nodes should be executed
 func (vs *ValidationService) GetExecutionOrder(ctx context.Context, wf *workflow.Workflow) ([]string, error) {
 	dag := workflow.NewDAG(wf)
-	
+
 	// Check for cycles first
 	if dag.HasCycle() {
 		return nil, workflow.ErrWorkflowHasCycle
 	}
-	
+
 	// Get topological order
 	order, err := dag.GetTopologicalOrder()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	vs.logger.Debug("Calculated execution order",
 		"workflow_id", wf.ID,
 		"nodes", len(order))
-	
+
 	return order, nil
 }
 
@@ -367,13 +367,13 @@ func (vs *ValidationService) cacheValidationResult(ctx context.Context, key stri
 // AnalyzeComplexity analyzes workflow complexity metrics
 func (vs *ValidationService) AnalyzeComplexity(ctx context.Context, wf *workflow.Workflow) map[string]interface{} {
 	dag := workflow.NewDAG(wf)
-	
+
 	// Calculate various complexity metrics
-	topOrder, _ := dag.GetTopologicalOrder()
+	_, _ = dag.GetTopologicalOrder()
 	criticalPath := dag.GetCriticalPath()
 	executionPaths := dag.GetExecutionPaths()
 	levels := dag.CalculateLevels()
-	
+
 	// Calculate max depth
 	maxDepth := 0
 	for _, level := range levels {
@@ -381,13 +381,13 @@ func (vs *ValidationService) AnalyzeComplexity(ctx context.Context, wf *workflow
 			maxDepth = level
 		}
 	}
-	
+
 	// Count node types
 	nodeTypes := make(map[string]int)
 	for _, node := range wf.Nodes {
 		nodeTypes[node.Type]++
 	}
-	
+
 	// Calculate branching factor
 	branchingFactor := 0
 	for _, edges := range dag.Edges {
@@ -395,26 +395,26 @@ func (vs *ValidationService) AnalyzeComplexity(ctx context.Context, wf *workflow
 			branchingFactor = len(edges)
 		}
 	}
-	
+
 	metrics := map[string]interface{}{
-		"total_nodes":       len(wf.Nodes),
-		"total_connections": len(wf.Connections),
-		"max_depth":         maxDepth,
+		"total_nodes":          len(wf.Nodes),
+		"total_connections":    len(wf.Connections),
+		"max_depth":            maxDepth,
 		"critical_path_length": len(criticalPath),
-		"execution_paths":   len(executionPaths),
-		"branching_factor":  branchingFactor,
-		"start_nodes":       len(dag.StartNodes),
-		"end_nodes":         len(dag.EndNodes),
-		"node_types":        nodeTypes,
-		"has_loops":         nodeTypes[workflow.NodeTypeLoop] > 0,
-		"has_conditions":    nodeTypes[workflow.NodeTypeCondition] > 0,
-		"complexity_score":  calculateComplexityScore(len(wf.Nodes), len(wf.Connections), maxDepth),
+		"execution_paths":      len(executionPaths),
+		"branching_factor":     branchingFactor,
+		"start_nodes":          len(dag.StartNodes),
+		"end_nodes":            len(dag.EndNodes),
+		"node_types":           nodeTypes,
+		"has_loops":            nodeTypes[workflow.NodeTypeLoop] > 0,
+		"has_conditions":       nodeTypes[workflow.NodeTypeCondition] > 0,
+		"complexity_score":     calculateComplexityScore(len(wf.Nodes), len(wf.Connections), maxDepth),
 	}
-	
+
 	vs.logger.Info("Workflow complexity analysis",
 		"workflow_id", wf.ID,
 		"metrics", metrics)
-	
+
 	return metrics
 }
 

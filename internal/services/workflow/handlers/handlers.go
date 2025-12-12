@@ -41,14 +41,14 @@ func (h *WorkflowHandlers) ListWorkflows(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	status := c.Query("status")
-	
+
 	workflows, total, err := h.service.ListWorkflows(c.Request.Context(), userID, page, limit, status)
 	if err != nil {
 		h.logger.Error("Failed to list workflows", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list workflows"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"workflows": workflows,
 		"total":     total,
@@ -60,7 +60,7 @@ func (h *WorkflowHandlers) ListWorkflows(c *gin.Context) {
 func (h *WorkflowHandlers) GetWorkflow(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	workflow, err := h.service.GetWorkflow(c.Request.Context(), workflowID, userID)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -71,7 +71,7 @@ func (h *WorkflowHandlers) GetWorkflow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get workflow"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, workflow)
 }
 
@@ -81,9 +81,9 @@ func (h *WorkflowHandlers) CreateWorkflow(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	req.UserID = c.GetString("user_id")
-	
+
 	workflow, err := h.service.CreateWorkflow(c.Request.Context(), &req)
 	if err != nil {
 		if err == service.ErrInvalidWorkflow {
@@ -94,23 +94,23 @@ func (h *WorkflowHandlers) CreateWorkflow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create workflow"})
 		return
 	}
-	
+
 	c.JSON(http.StatusCreated, workflow)
 }
 
 func (h *WorkflowHandlers) UpdateWorkflow(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	var req workflow.UpdateWorkflowRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	req.WorkflowID = workflowID
 	req.UserID = userID
-	
+
 	workflow, err := h.service.UpdateWorkflow(c.Request.Context(), &req)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -125,14 +125,14 @@ func (h *WorkflowHandlers) UpdateWorkflow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update workflow"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, workflow)
 }
 
 func (h *WorkflowHandlers) DeleteWorkflow(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	if err := h.service.DeleteWorkflow(c.Request.Context(), workflowID, userID); err != nil {
 		if err == service.ErrWorkflowNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Workflow not found"})
@@ -146,7 +146,7 @@ func (h *WorkflowHandlers) DeleteWorkflow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete workflow"})
 		return
 	}
-	
+
 	c.Status(http.StatusNoContent)
 }
 
@@ -154,7 +154,7 @@ func (h *WorkflowHandlers) DeleteWorkflow(c *gin.Context) {
 func (h *WorkflowHandlers) GetWorkflowVersions(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	versions, err := h.service.GetWorkflowVersions(c.Request.Context(), workflowID, userID)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -165,7 +165,7 @@ func (h *WorkflowHandlers) GetWorkflowVersions(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get workflow versions"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"versions": versions})
 }
 
@@ -173,7 +173,7 @@ func (h *WorkflowHandlers) GetWorkflowVersion(c *gin.Context) {
 	workflowID := c.Param("id")
 	version, _ := strconv.Atoi(c.Param("version"))
 	userID := c.GetString("user_id")
-	
+
 	workflow, err := h.service.GetWorkflowVersion(c.Request.Context(), workflowID, version, userID)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -184,20 +184,20 @@ func (h *WorkflowHandlers) GetWorkflowVersion(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get workflow version"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, workflow)
 }
 
 func (h *WorkflowHandlers) CreateWorkflowVersion(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	var req workflow.CreateVersionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	version, err := h.service.CreateWorkflowVersion(c.Request.Context(), workflowID, userID, &req)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -208,7 +208,7 @@ func (h *WorkflowHandlers) CreateWorkflowVersion(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create workflow version"})
 		return
 	}
-	
+
 	c.JSON(http.StatusCreated, gin.H{"version": version})
 }
 
@@ -216,7 +216,7 @@ func (h *WorkflowHandlers) RollbackWorkflowVersion(c *gin.Context) {
 	workflowID := c.Param("id")
 	version, _ := strconv.Atoi(c.Param("version"))
 	userID := c.GetString("user_id")
-	
+
 	if err := h.service.RollbackWorkflowVersion(c.Request.Context(), workflowID, version, userID); err != nil {
 		if err == service.ErrWorkflowNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Workflow version not found"})
@@ -226,7 +226,7 @@ func (h *WorkflowHandlers) RollbackWorkflowVersion(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to rollback workflow version"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "Workflow rolled back successfully"})
 }
 
@@ -234,7 +234,7 @@ func (h *WorkflowHandlers) RollbackWorkflowVersion(c *gin.Context) {
 func (h *WorkflowHandlers) ActivateWorkflow(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	if err := h.service.ActivateWorkflow(c.Request.Context(), workflowID, userID); err != nil {
 		if err == service.ErrWorkflowNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Workflow not found"})
@@ -244,14 +244,14 @@ func (h *WorkflowHandlers) ActivateWorkflow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to activate workflow"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "Workflow activated"})
 }
 
 func (h *WorkflowHandlers) DeactivateWorkflow(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	if err := h.service.DeactivateWorkflow(c.Request.Context(), workflowID, userID); err != nil {
 		if err == service.ErrWorkflowNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Workflow not found"})
@@ -261,14 +261,14 @@ func (h *WorkflowHandlers) DeactivateWorkflow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deactivate workflow"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "Workflow deactivated"})
 }
 
 func (h *WorkflowHandlers) DuplicateWorkflow(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	var req struct {
 		Name string `json:"name" binding:"required"`
 	}
@@ -276,7 +276,7 @@ func (h *WorkflowHandlers) DuplicateWorkflow(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	workflow, err := h.service.DuplicateWorkflow(c.Request.Context(), workflowID, userID, req.Name)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -287,14 +287,14 @@ func (h *WorkflowHandlers) DuplicateWorkflow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to duplicate workflow"})
 		return
 	}
-	
+
 	c.JSON(http.StatusCreated, workflow)
 }
 
 func (h *WorkflowHandlers) ValidateWorkflow(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	errors, warnings, err := h.service.ValidateWorkflow(c.Request.Context(), workflowID, userID)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -305,7 +305,7 @@ func (h *WorkflowHandlers) ValidateWorkflow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate workflow"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"valid":    len(errors) == 0,
 		"errors":   errors,
@@ -316,7 +316,7 @@ func (h *WorkflowHandlers) ValidateWorkflow(c *gin.Context) {
 func (h *WorkflowHandlers) ExecuteWorkflow(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	var req struct {
 		Data map[string]interface{} `json:"data"`
 	}
@@ -324,7 +324,7 @@ func (h *WorkflowHandlers) ExecuteWorkflow(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	executionID, err := h.service.ExecuteWorkflow(c.Request.Context(), workflowID, userID, req.Data)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -339,7 +339,7 @@ func (h *WorkflowHandlers) ExecuteWorkflow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to execute workflow"})
 		return
 	}
-	
+
 	c.JSON(http.StatusAccepted, gin.H{
 		"execution_id": executionID,
 		"status":       "started",
@@ -349,7 +349,7 @@ func (h *WorkflowHandlers) ExecuteWorkflow(c *gin.Context) {
 func (h *WorkflowHandlers) TestWorkflow(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	var req struct {
 		Data map[string]interface{} `json:"data"`
 	}
@@ -357,7 +357,7 @@ func (h *WorkflowHandlers) TestWorkflow(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	result, err := h.service.TestWorkflow(c.Request.Context(), workflowID, userID, req.Data)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -368,7 +368,7 @@ func (h *WorkflowHandlers) TestWorkflow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to test workflow"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, result)
 }
 
@@ -376,7 +376,7 @@ func (h *WorkflowHandlers) TestWorkflow(c *gin.Context) {
 func (h *WorkflowHandlers) GetWorkflowPermissions(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	permissions, err := h.service.GetWorkflowPermissions(c.Request.Context(), workflowID, userID)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -387,14 +387,14 @@ func (h *WorkflowHandlers) GetWorkflowPermissions(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get workflow permissions"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"permissions": permissions})
 }
 
 func (h *WorkflowHandlers) ShareWorkflow(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	var req struct {
 		UserID     string `json:"user_id"`
 		Permission string `json:"permission" binding:"required,oneof=view edit admin"`
@@ -403,7 +403,7 @@ func (h *WorkflowHandlers) ShareWorkflow(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	if err := h.service.ShareWorkflow(c.Request.Context(), workflowID, userID, req.UserID, req.Permission); err != nil {
 		if err == service.ErrWorkflowNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Workflow not found"})
@@ -413,7 +413,7 @@ func (h *WorkflowHandlers) ShareWorkflow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to share workflow"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "Workflow shared successfully"})
 }
 
@@ -421,7 +421,7 @@ func (h *WorkflowHandlers) UnshareWorkflow(c *gin.Context) {
 	workflowID := c.Param("id")
 	targetUserID := c.Param("userId")
 	userID := c.GetString("user_id")
-	
+
 	if err := h.service.UnshareWorkflow(c.Request.Context(), workflowID, userID, targetUserID); err != nil {
 		if err == service.ErrWorkflowNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Workflow not found"})
@@ -431,14 +431,14 @@ func (h *WorkflowHandlers) UnshareWorkflow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unshare workflow"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "Workflow unshared successfully"})
 }
 
 func (h *WorkflowHandlers) PublishWorkflow(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	var req struct {
 		Description string   `json:"description"`
 		Tags        []string `json:"tags"`
@@ -447,7 +447,7 @@ func (h *WorkflowHandlers) PublishWorkflow(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	if err := h.service.PublishWorkflow(c.Request.Context(), workflowID, userID, req.Description, req.Tags); err != nil {
 		if err == service.ErrWorkflowNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Workflow not found"})
@@ -457,27 +457,27 @@ func (h *WorkflowHandlers) PublishWorkflow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to publish workflow"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "Workflow published successfully"})
 }
 
 // Workflow templates
 func (h *WorkflowHandlers) ListTemplates(c *gin.Context) {
 	category := c.Query("category")
-	
+
 	templates, err := h.service.ListTemplates(c.Request.Context(), category)
 	if err != nil {
 		h.logger.Error("Failed to list templates", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list templates"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"templates": templates})
 }
 
 func (h *WorkflowHandlers) GetTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	
+
 	template, err := h.service.GetTemplate(c.Request.Context(), templateID)
 	if err != nil {
 		if err == service.ErrTemplateNotFound {
@@ -488,44 +488,45 @@ func (h *WorkflowHandlers) GetTemplate(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get template"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, template)
 }
 
 func (h *WorkflowHandlers) CreateTemplate(c *gin.Context) {
 	userID := c.GetString("user_id")
-	
+
 	var req workflow.CreateTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	req.CreatorID = userID
-	
+
 	template, err := h.service.CreateTemplate(c.Request.Context(), &req)
 	if err != nil {
 		h.logger.Error("Failed to create template", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create template"})
 		return
 	}
-	
+
 	c.JSON(http.StatusCreated, template)
 }
 
 func (h *WorkflowHandlers) CreateFromTemplate(c *gin.Context) {
 	templateID := c.Param("templateId")
 	userID := c.GetString("user_id")
-	
+
 	var req struct {
-		Name string `json:"name" binding:"required"`
+		Name      string                 `json:"name" binding:"required"`
+		Variables map[string]interface{} `json:"variables"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
-	workflow, err := h.service.CreateFromTemplate(c.Request.Context(), templateID, userID, req.Name)
+
+	workflow, err := h.service.CreateFromTemplate(c.Request.Context(), templateID, userID, req.Name, req.Variables)
 	if err != nil {
 		if err == service.ErrTemplateNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Template not found"})
@@ -535,14 +536,14 @@ func (h *WorkflowHandlers) CreateFromTemplate(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create from template"})
 		return
 	}
-	
+
 	c.JSON(http.StatusCreated, workflow)
 }
 
 // Workflow import/export
 func (h *WorkflowHandlers) ImportWorkflow(c *gin.Context) {
 	userID := c.GetString("user_id")
-	
+
 	var req struct {
 		Data   interface{} `json:"data" binding:"required"`
 		Format string      `json:"format" binding:"required,oneof=json yaml n8n"`
@@ -551,14 +552,14 @@ func (h *WorkflowHandlers) ImportWorkflow(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	workflow, err := h.service.ImportWorkflow(c.Request.Context(), userID, req.Data, req.Format)
 	if err != nil {
 		h.logger.Error("Failed to import workflow", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to import workflow"})
 		return
 	}
-	
+
 	c.JSON(http.StatusCreated, workflow)
 }
 
@@ -566,7 +567,7 @@ func (h *WorkflowHandlers) ExportWorkflow(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
 	format := c.DefaultQuery("format", "json")
-	
+
 	data, err := h.service.ExportWorkflow(c.Request.Context(), workflowID, userID, format)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -577,7 +578,7 @@ func (h *WorkflowHandlers) ExportWorkflow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to export workflow"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, data)
 }
 
@@ -585,7 +586,7 @@ func (h *WorkflowHandlers) ExportWorkflow(c *gin.Context) {
 func (h *WorkflowHandlers) GetWorkflowStats(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	stats, err := h.service.GetWorkflowStats(c.Request.Context(), workflowID, userID)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -596,7 +597,7 @@ func (h *WorkflowHandlers) GetWorkflowStats(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get workflow stats"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, stats)
 }
 
@@ -605,7 +606,7 @@ func (h *WorkflowHandlers) GetWorkflowExecutions(c *gin.Context) {
 	userID := c.GetString("user_id")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	
+
 	executions, total, err := h.service.GetWorkflowExecutions(c.Request.Context(), workflowID, userID, page, limit)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -616,7 +617,7 @@ func (h *WorkflowHandlers) GetWorkflowExecutions(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get workflow executions"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"executions": executions,
 		"total":      total,
@@ -628,7 +629,7 @@ func (h *WorkflowHandlers) GetWorkflowExecutions(c *gin.Context) {
 func (h *WorkflowHandlers) GetLatestRun(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	execution, err := h.service.GetLatestRun(c.Request.Context(), workflowID, userID)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -639,7 +640,7 @@ func (h *WorkflowHandlers) GetLatestRun(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get latest run"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, execution)
 }
 
@@ -651,7 +652,7 @@ func (h *WorkflowHandlers) ListCategories(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list categories"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"categories": categories})
 }
 
@@ -665,14 +666,14 @@ func (h *WorkflowHandlers) CreateCategory(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	category, err := h.service.CreateCategory(c.Request.Context(), req.Name, req.Description, req.Icon)
 	if err != nil {
 		h.logger.Error("Failed to create category", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create category"})
 		return
 	}
-	
+
 	c.JSON(http.StatusCreated, category)
 }
 
@@ -683,14 +684,14 @@ func (h *WorkflowHandlers) SearchWorkflows(c *gin.Context) {
 	tags := c.QueryArray("tags")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	
+
 	workflows, total, err := h.service.SearchWorkflows(c.Request.Context(), userID, query, category, tags, page, limit)
 	if err != nil {
 		h.logger.Error("Failed to search workflows", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to search workflows"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"workflows": workflows,
 		"total":     total,
@@ -701,14 +702,14 @@ func (h *WorkflowHandlers) SearchWorkflows(c *gin.Context) {
 
 func (h *WorkflowHandlers) GetPopularTags(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	
+
 	tags, err := h.service.GetPopularTags(c.Request.Context(), limit)
 	if err != nil {
 		h.logger.Error("Failed to get popular tags", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get popular tags"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"tags": tags})
 }
 
@@ -718,13 +719,13 @@ func (h *WorkflowHandlers) GetPopularTags(c *gin.Context) {
 func (h *WorkflowHandlers) CreateTrigger(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	var config map[string]interface{}
 	if err := c.ShouldBindJSON(&config); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	trigger, err := h.service.CreateTrigger(c.Request.Context(), workflowID, userID, config)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -735,7 +736,7 @@ func (h *WorkflowHandlers) CreateTrigger(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create trigger"})
 		return
 	}
-	
+
 	c.JSON(http.StatusCreated, trigger)
 }
 
@@ -743,7 +744,7 @@ func (h *WorkflowHandlers) CreateTrigger(c *gin.Context) {
 func (h *WorkflowHandlers) ListTriggers(c *gin.Context) {
 	workflowID := c.Param("id")
 	userID := c.GetString("user_id")
-	
+
 	triggers, err := h.service.ListTriggers(c.Request.Context(), workflowID, userID)
 	if err != nil {
 		if err == service.ErrWorkflowNotFound {
@@ -754,7 +755,7 @@ func (h *WorkflowHandlers) ListTriggers(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list triggers"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"triggers": triggers})
 }
 
@@ -762,7 +763,7 @@ func (h *WorkflowHandlers) ListTriggers(c *gin.Context) {
 func (h *WorkflowHandlers) GetTrigger(c *gin.Context) {
 	triggerID := c.Param("triggerId")
 	userID := c.GetString("user_id")
-	
+
 	trigger, err := h.service.GetTrigger(c.Request.Context(), triggerID, userID)
 	if err != nil {
 		if err == service.ErrUnauthorized {
@@ -773,7 +774,7 @@ func (h *WorkflowHandlers) GetTrigger(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get trigger"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, trigger)
 }
 
@@ -781,13 +782,13 @@ func (h *WorkflowHandlers) GetTrigger(c *gin.Context) {
 func (h *WorkflowHandlers) UpdateTrigger(c *gin.Context) {
 	triggerID := c.Param("triggerId")
 	userID := c.GetString("user_id")
-	
+
 	var updates map[string]interface{}
 	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	trigger, err := h.service.UpdateTrigger(c.Request.Context(), triggerID, userID, updates)
 	if err != nil {
 		if err == service.ErrUnauthorized {
@@ -798,7 +799,7 @@ func (h *WorkflowHandlers) UpdateTrigger(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update trigger"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, trigger)
 }
 
@@ -806,7 +807,7 @@ func (h *WorkflowHandlers) UpdateTrigger(c *gin.Context) {
 func (h *WorkflowHandlers) DeleteTrigger(c *gin.Context) {
 	triggerID := c.Param("triggerId")
 	userID := c.GetString("user_id")
-	
+
 	if err := h.service.DeleteTrigger(c.Request.Context(), triggerID, userID); err != nil {
 		if err == service.ErrUnauthorized {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized"})
@@ -816,7 +817,7 @@ func (h *WorkflowHandlers) DeleteTrigger(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete trigger"})
 		return
 	}
-	
+
 	c.Status(http.StatusNoContent)
 }
 
@@ -824,7 +825,7 @@ func (h *WorkflowHandlers) DeleteTrigger(c *gin.Context) {
 func (h *WorkflowHandlers) ActivateTrigger(c *gin.Context) {
 	triggerID := c.Param("triggerId")
 	userID := c.GetString("user_id")
-	
+
 	if err := h.service.ActivateTrigger(c.Request.Context(), triggerID, userID); err != nil {
 		if err == service.ErrUnauthorized {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized"})
@@ -838,7 +839,7 @@ func (h *WorkflowHandlers) ActivateTrigger(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to activate trigger"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "Trigger activated"})
 }
 
@@ -846,7 +847,7 @@ func (h *WorkflowHandlers) ActivateTrigger(c *gin.Context) {
 func (h *WorkflowHandlers) DeactivateTrigger(c *gin.Context) {
 	triggerID := c.Param("triggerId")
 	userID := c.GetString("user_id")
-	
+
 	if err := h.service.DeactivateTrigger(c.Request.Context(), triggerID, userID); err != nil {
 		if err == service.ErrUnauthorized {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized"})
@@ -856,7 +857,7 @@ func (h *WorkflowHandlers) DeactivateTrigger(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deactivate trigger"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "Trigger deactivated"})
 }
 
@@ -864,13 +865,13 @@ func (h *WorkflowHandlers) DeactivateTrigger(c *gin.Context) {
 func (h *WorkflowHandlers) TestTrigger(c *gin.Context) {
 	triggerID := c.Param("triggerId")
 	userID := c.GetString("user_id")
-	
+
 	var testData map[string]interface{}
 	if err := c.ShouldBindJSON(&testData); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	result, err := h.service.TestTrigger(c.Request.Context(), triggerID, userID, testData)
 	if err != nil {
 		if err == service.ErrUnauthorized {
@@ -881,6 +882,75 @@ func (h *WorkflowHandlers) TestTrigger(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to test trigger"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, result)
+}
+
+// Admin handlers (stubs for auth example)
+func (h *WorkflowHandlers) ListAllWorkflows(c *gin.Context) {
+	// Admin endpoint to list all workflows
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+
+	workflows, total, err := h.service.ListWorkflows(c.Request.Context(), "", page, limit, "")
+	if err != nil {
+		h.logger.Error("Failed to list all workflows", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list workflows"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"workflows": workflows,
+		"total":     total,
+		"page":      page,
+		"limit":     limit,
+	})
+}
+
+func (h *WorkflowHandlers) ForceExecuteWorkflow(c *gin.Context) {
+	workflowID := c.Param("id")
+
+	var req struct {
+		Data map[string]interface{} `json:"data"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Admin force execute (bypasses activation check)
+	executionID, err := h.service.ExecuteWorkflow(c.Request.Context(), workflowID, "admin", req.Data)
+	if err != nil {
+		h.logger.Error("Failed to force execute workflow", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to execute workflow"})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"execution_id": executionID,
+		"status":       "started",
+		"force":        true,
+	})
+}
+
+func (h *WorkflowHandlers) GetWorkflowAnalytics(c *gin.Context) {
+	// Placeholder for analytics
+	c.JSON(http.StatusOK, gin.H{
+		"total_workflows":    0,
+		"active_workflows":   0,
+		"total_executions":   0,
+		"success_rate":       0,
+		"avg_execution_time": 0,
+	})
+}
+
+func (h *WorkflowHandlers) GetExecutionAnalytics(c *gin.Context) {
+	// Placeholder for execution analytics
+	c.JSON(http.StatusOK, gin.H{
+		"total_executions": 0,
+		"completed":        0,
+		"failed":           0,
+		"running":          0,
+		"avg_duration_ms":  0,
+	})
 }

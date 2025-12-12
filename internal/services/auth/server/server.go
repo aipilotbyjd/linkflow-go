@@ -123,6 +123,10 @@ func setupRouter(h *handlers.AuthHandlers, jwtManager *jwt.Manager, redisClient 
 	router.GET("/ready", h.Ready)
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
+	// OpenAPI/Swagger documentation
+	router.GET("/api/docs", serveSwaggerUI())
+	router.StaticFile("/api/openapi.yaml", "api/openapi/auth.yaml")
+
 	// Create rate limiter for login attempts
 	// Allow 5 attempts per 15 minutes, then block for 15 minutes
 	var loginRateLimiter ratelimit.RateLimiter
@@ -354,5 +358,45 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 		}
 
 		c.Next()
+	}
+}
+
+// serveSwaggerUI returns a handler that serves Swagger UI
+func serveSwaggerUI() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		html := `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkFlow Auth API - Swagger UI</title>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+    <style>
+        body { margin: 0; padding: 0; }
+        .topbar { display: none; }
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script>
+        window.onload = function() {
+            SwaggerUIBundle({
+                url: "/api/openapi.yaml",
+                dom_id: '#swagger-ui',
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIBundle.SwaggerUIStandalonePreset
+                ],
+                layout: "BaseLayout",
+                deepLinking: true,
+                persistAuthorization: true
+            });
+        };
+    </script>
+</body>
+</html>`
+		c.Header("Content-Type", "text/html")
+		c.String(http.StatusOK, html)
 	}
 }

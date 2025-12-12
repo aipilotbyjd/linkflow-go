@@ -74,12 +74,12 @@ func (k *KafkaEventBus) Publish(ctx context.Context, event Event) error {
 	if event.ID == "" {
 		event.ID = uuid.New().String()
 	}
-	
+
 	// Set timestamp if not set
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now().UTC()
 	}
-	
+
 	data, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("failed to marshal event: %w", err)
@@ -114,7 +114,7 @@ func (k *KafkaEventBus) Subscribe(topic string, handler EventHandler) error {
 
 	// Start consuming in a goroutine
 	go k.consume(reader, handler)
-	
+
 	return nil
 }
 
@@ -150,14 +150,14 @@ func (k *KafkaEventBus) Close() error {
 	if err := k.writer.Close(); err != nil {
 		return fmt.Errorf("failed to close writer: %w", err)
 	}
-	
+
 	// Close all readers
 	for topic, reader := range k.readers {
 		if err := reader.Close(); err != nil {
 			return fmt.Errorf("failed to close reader for topic %s: %w", topic, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -226,20 +226,21 @@ const (
 	UserLoggedOut  = "user.logged_out"
 	UserUpdated    = "user.updated"
 	UserDeleted    = "user.deleted"
-	
+
 	// Workflow events
-	WorkflowCreated    = "workflow.created"
-	WorkflowUpdated    = "workflow.updated"
-	WorkflowDeleted    = "workflow.deleted"
-	WorkflowActivated  = "workflow.activated"
+	WorkflowCreated     = "workflow.created"
+	WorkflowUpdated     = "workflow.updated"
+	WorkflowDeleted     = "workflow.deleted"
+	WorkflowActivated   = "workflow.activated"
 	WorkflowDeactivated = "workflow.deactivated"
-	
+
 	// Execution events
-	ExecutionStarted   = "execution.started"
-	ExecutionCompleted = "execution.completed"
-	ExecutionFailed    = "execution.failed"
-	ExecutionCancelled = "execution.cancelled"
-	
+	ExecutionStarted      = "execution.started"
+	ExecutionCompleted    = "execution.completed"
+	ExecutionFailed       = "execution.failed"
+	ExecutionCancelled    = "execution.cancelled"
+	ExecutionStateChanged = "execution.state_changed"
+
 	// Node events
 	NodeExecutionStarted   = "node.execution.started"
 	NodeExecutionCompleted = "node.execution.completed"
