@@ -7,14 +7,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/linkflow-go/internal/services/variable/server"
+	"github.com/linkflow-go/internal/services/websocket/server"
 	"github.com/linkflow-go/pkg/config"
 	"github.com/linkflow-go/pkg/logger"
 )
 
 func main() {
 	// Load configuration
-	cfg, err := config.Load("variable-service")
+	cfg, err := config.Load("websocket-service")
 	if err != nil {
 		panic(err)
 	}
@@ -30,7 +30,7 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
-		log.Info("Starting variable service", "port", cfg.Server.Port)
+		log.Info("Starting websocket service", "port", cfg.Server.Port)
 		if err := srv.Start(); err != nil {
 			log.Fatal("Failed to start server", "error", err)
 		}
@@ -41,7 +41,7 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	log.Info("Shutting down variable service...")
+	log.Info("Shutting down websocket service...")
 
 	// Graceful shutdown with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -51,5 +51,5 @@ func main() {
 		log.Error("Server forced to shutdown", "error", err)
 	}
 
-	log.Info("Variable service exited")
+	log.Info("Websocket service exited")
 }

@@ -1,19 +1,68 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: linkflow-config
+  name: {{ .Release.Name }}-config
   labels:
-    app.kubernetes.io/part-of: linkflow
+    app.kubernetes.io/name: linkflow
+    app.kubernetes.io/instance: {{ .Release.Name }}
 data:
-  DATABASE_HOST: {{ .Values.postgresql.host | default "postgres-service" | quote }}
-  DATABASE_PORT: {{ .Values.postgresql.port | default "5432" | quote }}
-  DATABASE_NAME: {{ .Values.postgresql.auth.database | default "linkflow" | quote }}
-  DATABASE_SSL_MODE: "require"
+  # Database configuration
+  DATABASE_HOST: "{{ .Release.Name }}-postgresql"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "{{ .Values.postgresql.auth.database }}"
+  DATABASE_SSL_MODE: "disable"
   
-  REDIS_HOST: {{ .Values.redis.host | default "redis-service" | quote }}
-  REDIS_PORT: {{ .Values.redis.port | default "6379" | quote }}
+  # Redis configuration
+  REDIS_HOST: "{{ .Release.Name }}-redis-master"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
   
-  KAFKA_BROKERS: {{ .Values.kafka.brokers | default "kafka-service:9092" | quote }}
+  # Kafka configuration
+  KAFKA_BROKERS: "{{ .Release.Name }}-kafka:9092"
+  KAFKA_CONSUMER_GROUP: "linkflow-group"
   
-  LOG_LEVEL: {{ .Values.common.logLevel | default "info" | quote }}
-  APP_ENV: {{ .Values.common.env | default "production" | quote }}
+  # Elasticsearch configuration
+  ELASTICSEARCH_URL: "http://{{ .Release.Name }}-elasticsearch:9200"
+  
+  # Service URLs
+  AUTH_SERVICE_URL: "http://auth-service:8001"
+  USER_SERVICE_URL: "http://user-service:8002"
+  WORKFLOW_SERVICE_URL: "http://workflow-service:8003"
+  EXECUTION_SERVICE_URL: "http://execution-service:8004"
+  EXECUTOR_SERVICE_URL: "http://executor-service:8005"
+  NODE_SERVICE_URL: "http://node-service:8006"
+  CREDENTIAL_SERVICE_URL: "http://credential-service:8007"
+  WEBHOOK_SERVICE_URL: "http://webhook-service:8008"
+  SCHEDULE_SERVICE_URL: "http://schedule-service:8009"
+  NOTIFICATION_SERVICE_URL: "http://notification-service:8010"
+  
+  # Observability
+  JAEGER_AGENT_HOST: "{{ .Release.Name }}-jaeger-agent"
+  JAEGER_AGENT_PORT: "6831"
+  PROMETHEUS_ENABLED: "true"
+  
+  # Application settings
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  ENVIRONMENT: "{{ .Values.global.environment | default "production" }}"
+  
+  # Rate limiting
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_REQUESTS: "1000"
+  RATE_LIMIT_WINDOW: "60"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Release.Name }}-secrets
+  labels:
+    app.kubernetes.io/name: linkflow
+    app.kubernetes.io/instance: {{ .Release.Name }}
+type: Opaque
+stringData:
+  {{- if .Values.security.secrets.existingSecret }}
+  # Using existing secret
+  {{- else }}
+  JWT_SECRET: "{{ .Values.security.secrets.jwtSecret | default (randAlphaNum 64) }}"
+  ENCRYPTION_KEY: "{{ .Values.security.secrets.encryptionKey | default (randAlphaNum 32) }}"
+  {{- end }}

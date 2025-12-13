@@ -48,26 +48,26 @@ func NewWorkDistributor(coordinator *Coordinator, logger logger.Logger) *WorkDis
 // DistributeWork distributes work items across available workers
 func (wd *WorkDistributor) DistributeWork(ctx context.Context, workItems []string) error {
 	workers := wd.coordinator.GetWorkerStatus()
-	
+
 	// Filter active workers
 	activeWorkers := make([]*WorkerNode, 0)
-	for i := range workers {
-		if workers[i].Status == WorkerStatusActive {
-			activeWorkers = append(activeWorkers, &workers[i])
+	for _, worker := range workers {
+		if worker.Status == WorkerStatusActive {
+			activeWorkers = append(activeWorkers, worker)
 		}
 	}
-	
+
 	if len(activeWorkers) == 0 {
 		return fmt.Errorf("no active workers available")
 	}
-	
+
 	// Partition work
 	assignments := wd.strategy.Partition(workItems, activeWorkers)
-	
+
 	// Create partitions
 	wd.mu.Lock()
 	defer wd.mu.Unlock()
-	
+
 	for workerID, items := range assignments {
 		partition := &Partition{
 			ID:            fmt.Sprintf("partition-%d", time.Now().UnixNano()),
@@ -76,16 +76,16 @@ func (wd *WorkDistributor) DistributeWork(ctx context.Context, workItems []strin
 			CreatedAt:     time.Now(),
 			LastUpdatedAt: time.Now(),
 		}
-		
+
 		wd.partitions[partition.ID] = partition
-		
+
 		wd.logger.Info("Created partition",
 			"partitionId", partition.ID,
 			"workerId", workerID,
 			"items", len(items),
 		)
 	}
-	
+
 	return nil
 }
 
@@ -93,7 +93,7 @@ func (wd *WorkDistributor) DistributeWork(ctx context.Context, workItems []strin
 func (wd *WorkDistributor) GetPartitionForWork(workID string) *Partition {
 	wd.mu.RLock()
 	defer wd.mu.RUnlock()
-	
+
 	for _, partition := range wd.partitions {
 		partition.mu.RLock()
 		for _, item := range partition.WorkItems {
@@ -104,40 +104,40 @@ func (wd *WorkDistributor) GetPartitionForWork(workID string) *Partition {
 		}
 		partition.mu.RUnlock()
 	}
-	
+
 	return nil
 }
 
 // Rebalance rebalances partitions across workers
 func (wd *WorkDistributor) Rebalance(ctx context.Context) error {
 	workers := wd.coordinator.GetWorkerStatus()
-	
+
 	// Filter active workers
 	activeWorkers := make([]*WorkerNode, 0)
-	for i := range workers {
-		if workers[i].Status == WorkerStatusActive {
-			activeWorkers = append(activeWorkers, &workers[i])
+	for _, worker := range workers {
+		if worker.Status == WorkerStatusActive {
+			activeWorkers = append(activeWorkers, worker)
 		}
 	}
-	
+
 	if len(activeWorkers) == 0 {
 		return fmt.Errorf("no active workers for rebalancing")
 	}
-	
+
 	wd.mu.Lock()
 	defer wd.mu.Unlock()
-	
+
 	// Rebalance existing partitions
 	newPartitions := wd.strategy.Rebalance(wd.partitions, activeWorkers)
-	
+
 	// Update partitions
 	wd.partitions = newPartitions
-	
+
 	wd.logger.Info("Rebalanced partitions",
 		"partitions", len(newPartitions),
 		"workers", len(activeWorkers),
 	)
-	
+
 	return nil
 }
 
@@ -152,9 +152,9 @@ type ConsistentHashStrategy struct {
 func (chs *ConsistentHashStrategy) Partition(workItems []string, workers []*WorkerNode) map[string][]string {
 	// Build hash ring
 	chs.buildRing(workers)
-	
+
 	assignments := make(map[string][]string)
-	
+
 	// Assign each work item
 	for _, item := range workItems {
 		workerID := chs.getWorkerForItem(item)
@@ -162,7 +162,7 @@ func (chs *ConsistentHashStrategy) Partition(workItems []string, workers []*Work
 			assignments[workerID] = append(assignments[workerID], item)
 		}
 	}
-	
+
 	return assignments
 }
 
@@ -170,7 +170,7 @@ func (chs *ConsistentHashStrategy) Partition(workItems []string, workers []*Work
 func (chs *ConsistentHashStrategy) Rebalance(currentPartitions map[string]*Partition, workers []*WorkerNode) map[string]*Partition {
 	// Build new hash ring
 	chs.buildRing(workers)
-	
+
 	// Collect all work items
 	allItems := []string{}
 	for _, partition := range currentPartitions {
@@ -178,13 +178,13 @@ func (chs *ConsistentHashStrategy) Rebalance(currentPartitions map[string]*Parti
 		allItems = append(allItems, partition.WorkItems...)
 		partition.mu.RUnlock()
 	}
-	
+
 	// Redistribute items
 	assignments := chs.Partition(allItems, workers)
-	
+
 	// Create new partitions
 	newPartitions := make(map[string]*Partition)
-	
+
 	for workerID, items := range assignments {
 		partition := &Partition{
 			ID:            fmt.Sprintf("partition-%d", time.Now().UnixNano()),
@@ -193,10 +193,10 @@ func (chs *ConsistentHashStrategy) Rebalance(currentPartitions map[string]*Parti
 			CreatedAt:     time.Now(),
 			LastUpdatedAt: time.Now(),
 		}
-		
+
 		newPartitions[partition.ID] = partition
 	}
-	
+
 	return newPartitions
 }
 
@@ -204,9 +204,9 @@ func (chs *ConsistentHashStrategy) Rebalance(currentPartitions map[string]*Parti
 func (chs *ConsistentHashStrategy) buildRing(workers []*WorkerNode) {
 	chs.mu.Lock()
 	defer chs.mu.Unlock()
-	
+
 	chs.ring = make(map[uint32]string)
-	
+
 	for _, worker := range workers {
 		for i := 0; i < chs.replicas; i++ {
 			hash := chs.hash(fmt.Sprintf("%s:%d", worker.ID, i))
@@ -219,23 +219,23 @@ func (chs *ConsistentHashStrategy) buildRing(workers []*WorkerNode) {
 func (chs *ConsistentHashStrategy) getWorkerForItem(item string) string {
 	chs.mu.RLock()
 	defer chs.mu.RUnlock()
-	
+
 	if len(chs.ring) == 0 {
 		return ""
 	}
-	
+
 	hash := chs.hash(item)
-	
+
 	// Find the first node with hash >= item hash
 	var keys []uint32
 	for k := range chs.ring {
 		keys = append(keys, k)
 	}
-	
+
 	// Simple linear search (in production, use sorted keys)
 	var selected uint32
 	minDiff := uint32(^uint32(0))
-	
+
 	for _, key := range keys {
 		if key >= hash {
 			diff := key - hash
@@ -245,7 +245,7 @@ func (chs *ConsistentHashStrategy) getWorkerForItem(item string) string {
 			}
 		}
 	}
-	
+
 	// If no key >= hash, wrap around to smallest key
 	if selected == 0 && len(keys) > 0 {
 		selected = keys[0]
@@ -255,7 +255,7 @@ func (chs *ConsistentHashStrategy) getWorkerForItem(item string) string {
 			}
 		}
 	}
-	
+
 	return chs.ring[selected]
 }
 
@@ -276,7 +276,7 @@ func NewRangePartitionStrategy(rangeSize int) *RangePartitionStrategy {
 	if rangeSize <= 0 {
 		rangeSize = 100
 	}
-	
+
 	return &RangePartitionStrategy{
 		rangeSize: rangeSize,
 	}
@@ -287,31 +287,31 @@ func (rps *RangePartitionStrategy) Partition(workItems []string, workers []*Work
 	if len(workers) == 0 {
 		return nil
 	}
-	
+
 	assignments := make(map[string][]string)
 	itemsPerWorker := len(workItems) / len(workers)
 	if itemsPerWorker == 0 {
 		itemsPerWorker = 1
 	}
-	
+
 	workerIndex := 0
 	currentBatch := []string{}
-	
+
 	for _, item := range workItems {
 		currentBatch = append(currentBatch, item)
-		
+
 		if len(currentBatch) >= itemsPerWorker && workerIndex < len(workers)-1 {
 			assignments[workers[workerIndex].ID] = currentBatch
 			currentBatch = []string{}
 			workerIndex++
 		}
 	}
-	
+
 	// Assign remaining items to last worker
 	if len(currentBatch) > 0 && workerIndex < len(workers) {
 		assignments[workers[workerIndex].ID] = currentBatch
 	}
-	
+
 	return assignments
 }
 
@@ -324,13 +324,13 @@ func (rps *RangePartitionStrategy) Rebalance(currentPartitions map[string]*Parti
 		allItems = append(allItems, partition.WorkItems...)
 		partition.mu.RUnlock()
 	}
-	
+
 	// Redistribute items
 	assignments := rps.Partition(allItems, workers)
-	
+
 	// Create new partitions
 	newPartitions := make(map[string]*Partition)
-	
+
 	for workerID, items := range assignments {
 		partition := &Partition{
 			ID:            fmt.Sprintf("partition-%d", time.Now().UnixNano()),
@@ -339,10 +339,10 @@ func (rps *RangePartitionStrategy) Rebalance(currentPartitions map[string]*Parti
 			CreatedAt:     time.Now(),
 			LastUpdatedAt: time.Now(),
 		}
-		
+
 		newPartitions[partition.ID] = partition
 	}
-	
+
 	return newPartitions
 }
 
@@ -354,21 +354,21 @@ func (hps *HashPartitionStrategy) Partition(workItems []string, workers []*Worke
 	if len(workers) == 0 {
 		return nil
 	}
-	
+
 	assignments := make(map[string][]string)
-	
+
 	for _, item := range workItems {
 		// Hash the item to determine worker
 		h := fnv.New32a()
 		h.Write([]byte(item))
 		hash := h.Sum32()
-		
+
 		workerIndex := int(hash % uint32(len(workers)))
 		workerID := workers[workerIndex].ID
-		
+
 		assignments[workerID] = append(assignments[workerID], item)
 	}
-	
+
 	return assignments
 }
 
@@ -381,13 +381,13 @@ func (hps *HashPartitionStrategy) Rebalance(currentPartitions map[string]*Partit
 		allItems = append(allItems, partition.WorkItems...)
 		partition.mu.RUnlock()
 	}
-	
+
 	// Redistribute items
 	assignments := hps.Partition(allItems, workers)
-	
+
 	// Create new partitions
 	newPartitions := make(map[string]*Partition)
-	
+
 	for workerID, items := range assignments {
 		partition := &Partition{
 			ID:            fmt.Sprintf("partition-%d", time.Now().UnixNano()),
@@ -396,9 +396,9 @@ func (hps *HashPartitionStrategy) Rebalance(currentPartitions map[string]*Partit
 			CreatedAt:     time.Now(),
 			LastUpdatedAt: time.Now(),
 		}
-		
+
 		newPartitions[partition.ID] = partition
 	}
-	
+
 	return newPartitions
 }

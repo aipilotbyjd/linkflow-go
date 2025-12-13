@@ -1,0 +1,152 @@
+# Production values for linkflow
+# Override default values for production deployment
+
+global:
+  imageRegistry: "your-registry.io"
+  imagePullSecrets:
+    - name: registry-credentials
+
+common:
+  image:
+    tag: "v1.0.0"
+    pullPolicy: Always
+
+gateway:
+  type: LoadBalancer
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+  ingress:
+    enabled: true
+    className: nginx
+    hostname: api.linkflow.io
+    tls:
+      enabled: true
+      secretName: linkflow-tls-prod
+
+services:
+  auth:
+    replicaCount: 5
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "500m"
+      limits:
+        memory: "1Gi"
+        cpu: "1000m"
+    autoscaling:
+      enabled: true
+      minReplicas: 5
+      maxReplicas: 20
+
+  workflow:
+    replicaCount: 5
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "1000m"
+      limits:
+        memory: "2Gi"
+        cpu: "2000m"
+
+  execution:
+    replicaCount: 10
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "4000m"
+
+  executor:
+    replicaCount: 20
+    autoscaling:
+      enabled: true
+      minReplicas: 20
+      maxReplicas: 200
+      targetCPUUtilizationPercentage: 60
+    resources:
+      requests:
+        memory: "4Gi"
+        cpu: "2000m"
+      limits:
+        memory: "8Gi"
+        cpu: "4000m"
+
+postgresql:
+  auth:
+    existingSecret: postgresql-credentials
+  primary:
+    persistence:
+      size: 100Gi
+  readReplicas:
+    replicaCount: 3
+
+redis:
+  auth:
+    existingSecret: redis-credentials
+  master:
+    persistence:
+      size: 20Gi
+  replica:
+    replicaCount: 3
+
+kafka:
+  replicaCount: 5
+  persistence:
+    size: 50Gi
+
+elasticsearch:
+  master:
+    replicaCount: 3
+    persistence:
+      size: 50Gi
+  data:
+    replicaCount: 5
+    persistence:
+      size: 100Gi
+
+monitoring:
+  prometheus:
+    retention: 90d
+    persistence:
+      size: 200Gi
+  grafana:
+    adminPassword: ""  # Use secret
+    persistence:
+      enabled: true
+      size: 10Gi
+
+security:
+  networkPolicies:
+    enabled: true
+  secrets:
+    existingSecret: linkflow-secrets
+
+backup:
+  enabled: true
+  schedule: "0 */6 * * *"
+  retention: 30
+
+nodeSelector:
+  node-type: application
+
+tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "linkflow"
+    effect: "NoSchedule"
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - linkflow
+          topologyKey: kubernetes.io/hostname

@@ -1,388 +1,151 @@
 #!/bin/bash
-
-# Database Seeding Script for LinkFlow Development
-
 set -e
 
-# Source environment variables
-if [ -f .env ]; then
-    export $(cat .env | grep -v '^#' | xargs)
-fi
-
-# Default values
-DB_HOST=${DB_HOST:-localhost}
-DB_PORT=${DB_PORT:-5432}
-DB_NAME=${DB_NAME:-linkflow}
-DB_USER=${DB_USER:-linkflow}
-DB_PASSWORD=${DB_PASSWORD:-linkflow123}
-
-# Colors for output
+# Colors
 GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
+YELLOW='\033[0;33m'
 NC='\033[0m'
 
-print_status() {
-    echo -e "${GREEN}[SEED]${NC} $1"
-}
+echo -e "${GREEN}Seeding LinkFlow database...${NC}"
 
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+# Database connection
+DB_HOST=${LINKFLOW_DB_HOST:-localhost}
+DB_PORT=${LINKFLOW_DB_PORT:-5432}
+DB_NAME=${LINKFLOW_DB_NAME:-linkflow}
+DB_USER=${LINKFLOW_DB_USER:-linkflow}
+DB_PASSWORD=${LINKFLOW_DB_PASSWORD:-linkflow123}
 
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
+export PGPASSWORD=$DB_PASSWORD
 
-# Function to run SQL command
-run_sql() {
-    PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "$1" > /dev/null 2>&1
-}
+# Check if psql is available
+if ! command -v psql &> /dev/null; then
+    echo "psql not found. Using docker..."
+    PSQL="docker exec -i linkflow-go-postgres-1 psql -U $DB_USER -d $DB_NAME"
+else
+    PSQL="psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME"
+fi
 
-# Function to run SQL file
-run_sql_file() {
-    PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f "$1" > /dev/null 2>&1
-}
+echo -e "${YELLOW}Creating admin user...${NC}"
+$PSQL << 'EOF'
+-- Insert admin user (password: admin123)
+INSERT INTO auth.users (id, email, username, password, first_name, last_name, email_verified, status)
+VALUES (
+    'a0000000-0000-0000-0000-000000000001',
+    'admin@linkflow.io',
+    'admin',
+    '$2a$10$rQEY7xQxB7xQxB7xQxB7xOQxB7xQxB7xQxB7xQxB7xQxB7xQxB7xQ',
+    'Admin',
+    'User',
+    true,
+    'active'
+) ON CONFLICT (email) DO NOTHING;
 
-# Check database connection
-check_db_connection() {
-    print_status "Checking database connection..."
-    PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c '\q' 2>/dev/null
-    if [ $? -ne 0 ]; then
-        print_error "Cannot connect to database"
-        exit 1
-    fi
-    print_status "Database connection successful ✓"
-}
+-- Assign admin role
+INSERT INTO auth.user_roles (user_id, role_id)
+SELECT 'a0000000-0000-0000-0000-000000000001', id FROM auth.roles WHERE name = 'admin'
+ON CONFLICT DO NOTHING;
 
-# Clear existing data
-clear_data() {
-    print_warning "Clearing existing development data..."
-    
-    # Clear in reverse order of dependencies
-    run_sql "TRUNCATE TABLE webhooks CASCADE;" || true
-    run_sql "TRUNCATE TABLE api_keys CASCADE;" || true
-    run_sql "TRUNCATE TABLE audit_logs CASCADE;" || true
-    run_sql "TRUNCATE TABLE execution_steps CASCADE;" || true
-    run_sql "TRUNCATE TABLE executions CASCADE;" || true
-    run_sql "TRUNCATE TABLE credentials CASCADE;" || true
-    run_sql "TRUNCATE TABLE workflow_versions CASCADE;" || true
-    run_sql "TRUNCATE TABLE workflows CASCADE;" || true
-    run_sql "TRUNCATE TABLE projects CASCADE;" || true
-    run_sql "TRUNCATE TABLE organization_members CASCADE;" || true
-    run_sql "TRUNCATE TABLE organizations CASCADE;" || true
-    run_sql "TRUNCATE TABLE users CASCADE;" || true
-    
-    print_status "Existing data cleared"
-}
+-- Insert demo user (password: demo123)
+INSERT INTO auth.users (id, email, username, password, first_name, last_name, email_verified, status)
+VALUES (
+    'a0000000-0000-0000-0000-000000000002',
+    'demo@linkflow.io',
+    'demo',
+    '$2a$10$rQEY7xQxB7xQxB7xQxB7xOQxB7xQxB7xQxB7xQxB7xQxB7xQxB7xQ',
+    'Demo',
+    'User',
+    true,
+    'active'
+) ON CONFLICT (email) DO NOTHING;
 
-# Seed users
-seed_users() {
-    print_status "Seeding users..."
-    
-    # Password hash for 'password123' (you should use proper bcrypt in production)
-    local password_hash='$2a$10$YourHashedPasswordHere'
-    
-    run_sql "
-    INSERT INTO users (id, email, username, full_name, status, metadata)
-    VALUES 
-        ('550e8400-e29b-41d4-a716-446655440001', 'admin@linkflow.local', 'admin', 'Admin User', 'active', '{\"role\": \"admin\"}'),
-        ('550e8400-e29b-41d4-a716-446655440002', 'john.doe@linkflow.local', 'johndoe', 'John Doe', 'active', '{\"role\": \"user\"}'),
-        ('550e8400-e29b-41d4-a716-446655440003', 'jane.smith@linkflow.local', 'janesmith', 'Jane Smith', 'active', '{\"role\": \"user\"}'),
-        ('550e8400-e29b-41d4-a716-446655440004', 'bob.wilson@linkflow.local', 'bobwilson', 'Bob Wilson', 'active', '{\"role\": \"user\"}'),
-        ('550e8400-e29b-41d4-a716-446655440005', 'alice.johnson@linkflow.local', 'alicejohnson', 'Alice Johnson', 'inactive', '{\"role\": \"user\"}')
-    ON CONFLICT (id) DO NOTHING;"
-    
-    print_status "Users seeded ✓"
-}
+-- Assign user role to demo
+INSERT INTO auth.user_roles (user_id, role_id)
+SELECT 'a0000000-0000-0000-0000-000000000002', id FROM auth.roles WHERE name = 'user'
+ON CONFLICT DO NOTHING;
+EOF
 
-# Seed organizations
-seed_organizations() {
-    print_status "Seeding organizations..."
-    
-    run_sql "
-    INSERT INTO organizations (id, name, slug, description, owner_id, settings)
-    VALUES 
-        ('650e8400-e29b-41d4-a716-446655440001', 'Acme Corporation', 'acme-corp', 'Leading technology solutions provider', '550e8400-e29b-41d4-a716-446655440001', '{\"plan\": \"enterprise\", \"max_workflows\": 1000}'),
-        ('650e8400-e29b-41d4-a716-446655440002', 'StartupXYZ', 'startup-xyz', 'Innovative startup in the automation space', '550e8400-e29b-41d4-a716-446655440002', '{\"plan\": \"startup\", \"max_workflows\": 100}'),
-        ('650e8400-e29b-41d4-a716-446655440003', 'Digital Agency', 'digital-agency', 'Creative digital solutions', '550e8400-e29b-41d4-a716-446655440003', '{\"plan\": \"professional\", \"max_workflows\": 500}')
-    ON CONFLICT (id) DO NOTHING;"
-    
-    # Add members to organizations
-    run_sql "
-    INSERT INTO organization_members (organization_id, user_id, role, permissions)
-    VALUES 
-        ('650e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440001', 'owner', '[\"*\"]'),
-        ('650e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440002', 'admin', '[\"read\", \"write\", \"delete\"]'),
-        ('650e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440003', 'member', '[\"read\", \"write\"]'),
-        ('650e8400-e29b-41d4-a716-446655440002', '550e8400-e29b-41d4-a716-446655440002', 'owner', '[\"*\"]'),
-        ('650e8400-e29b-41d4-a716-446655440002', '550e8400-e29b-41d4-a716-446655440004', 'member', '[\"read\", \"write\"]')
-    ON CONFLICT (organization_id, user_id) DO NOTHING;"
-    
-    print_status "Organizations seeded ✓"
-}
+echo -e "${YELLOW}Creating sample workflows...${NC}"
+$PSQL << 'EOF'
+-- Sample HTTP Request workflow
+INSERT INTO workflow.workflows (id, name, description, user_id, nodes, connections, settings, status, is_active, version)
+VALUES (
+    'w0000000-0000-0000-0000-000000000001',
+    'HTTP Request Example',
+    'A simple workflow that makes an HTTP request',
+    'a0000000-0000-0000-0000-000000000002',
+    '[
+        {"id": "trigger_1", "name": "Manual Trigger", "type": "manualTrigger", "position": {"x": 100, "y": 200}, "parameters": {}},
+        {"id": "http_1", "name": "HTTP Request", "type": "http", "position": {"x": 350, "y": 200}, "parameters": {"url": "https://api.example.com/data", "method": "GET"}}
+    ]'::jsonb,
+    '[{"id": "conn_1", "source": "trigger_1", "target": "http_1", "sourcePort": "output", "targetPort": "input"}]'::jsonb,
+    '{"timeout": 300, "retryOnFailure": false, "maxRetries": 3, "timezone": "UTC"}'::jsonb,
+    'inactive',
+    false,
+    1
+) ON CONFLICT DO NOTHING;
 
-# Seed projects
-seed_projects() {
-    print_status "Seeding projects..."
-    
-    run_sql "
-    INSERT INTO projects (id, organization_id, name, description, created_by, settings)
-    VALUES 
-        ('750e8400-e29b-41d4-a716-446655440001', '650e8400-e29b-41d4-a716-446655440001', 'Customer Onboarding', 'Automated customer onboarding workflows', '550e8400-e29b-41d4-a716-446655440001', '{\"notifications\": true}'),
-        ('750e8400-e29b-41d4-a716-446655440002', '650e8400-e29b-41d4-a716-446655440001', 'Data Processing Pipeline', 'ETL and data processing workflows', '550e8400-e29b-41d4-a716-446655440002', '{\"notifications\": true}'),
-        ('750e8400-e29b-41d4-a716-446655440003', '650e8400-e29b-41d4-a716-446655440002', 'Marketing Automation', 'Email and social media automation', '550e8400-e29b-41d4-a716-446655440002', '{\"notifications\": false}')
-    ON CONFLICT (id) DO NOTHING;"
-    
-    print_status "Projects seeded ✓"
-}
+-- Sample Conditional workflow
+INSERT INTO workflow.workflows (id, name, description, user_id, nodes, connections, settings, status, is_active, version)
+VALUES (
+    'w0000000-0000-0000-0000-000000000002',
+    'Conditional Logic Example',
+    'Demonstrates IF/ELSE branching',
+    'a0000000-0000-0000-0000-000000000002',
+    '[
+        {"id": "trigger_1", "name": "Webhook Trigger", "type": "webhookTrigger", "position": {"x": 100, "y": 200}, "parameters": {}},
+        {"id": "if_1", "name": "Check Value", "type": "if", "position": {"x": 350, "y": 200}, "parameters": {"condition": {"field": "body.status", "operator": "equals", "value": "success"}}},
+        {"id": "slack_1", "name": "Send Success", "type": "slack", "position": {"x": 600, "y": 100}, "parameters": {"text": "Success!"}},
+        {"id": "email_1", "name": "Send Alert", "type": "email", "position": {"x": 600, "y": 300}, "parameters": {"subject": "Alert"}}
+    ]'::jsonb,
+    '[
+        {"id": "conn_1", "source": "trigger_1", "target": "if_1"},
+        {"id": "conn_2", "source": "if_1", "target": "slack_1", "sourcePort": "true"},
+        {"id": "conn_3", "source": "if_1", "target": "email_1", "sourcePort": "false"}
+    ]'::jsonb,
+    '{"timeout": 300, "retryOnFailure": true, "maxRetries": 3, "timezone": "UTC"}'::jsonb,
+    'inactive',
+    false,
+    1
+) ON CONFLICT DO NOTHING;
+EOF
 
-# Seed workflows
-seed_workflows() {
-    print_status "Seeding workflows..."
-    
-    run_sql "
-    INSERT INTO workflows (id, project_id, name, description, status, definition, trigger_config, tags, created_by)
-    VALUES 
-        (
-            '850e8400-e29b-41d4-a716-446655440001',
-            '750e8400-e29b-41d4-a716-446655440001',
-            'Welcome Email Workflow',
-            'Send welcome email to new customers',
-            'published',
-            '{
-                \"nodes\": [
-                    {\"id\": \"trigger-1\", \"type\": \"trigger\", \"config\": {\"type\": \"webhook\"}},
-                    {\"id\": \"action-1\", \"type\": \"action\", \"config\": {\"type\": \"send_email\"}},
-                    {\"id\": \"action-2\", \"type\": \"action\", \"config\": {\"type\": \"update_crm\"}}
-                ],
-                \"edges\": [
-                    {\"source\": \"trigger-1\", \"target\": \"action-1\"},
-                    {\"source\": \"action-1\", \"target\": \"action-2\"}
-                ]
-            }',
-            '{\"type\": \"webhook\", \"path\": \"/webhook/welcome\"}',
-            '{automation, email, customer}',
-            '550e8400-e29b-41d4-a716-446655440001'
-        ),
-        (
-            '850e8400-e29b-41d4-a716-446655440002',
-            '750e8400-e29b-41d4-a716-446655440002',
-            'Data Sync Pipeline',
-            'Sync data between databases',
-            'published',
-            '{
-                \"nodes\": [
-                    {\"id\": \"trigger-1\", \"type\": \"trigger\", \"config\": {\"type\": \"schedule\", \"cron\": \"0 */6 * * *\"}},
-                    {\"id\": \"action-1\", \"type\": \"action\", \"config\": {\"type\": \"fetch_data\"}},
-                    {\"id\": \"transform-1\", \"type\": \"transform\", \"config\": {\"type\": \"map\"}},
-                    {\"id\": \"action-2\", \"type\": \"action\", \"config\": {\"type\": \"save_data\"}}
-                ],
-                \"edges\": [
-                    {\"source\": \"trigger-1\", \"target\": \"action-1\"},
-                    {\"source\": \"action-1\", \"target\": \"transform-1\"},
-                    {\"source\": \"transform-1\", \"target\": \"action-2\"}
-                ]
-            }',
-            '{\"type\": \"schedule\", \"cron\": \"0 */6 * * *\"}',
-            '{data, etl, scheduled}',
-            '550e8400-e29b-41d4-a716-446655440002'
-        ),
-        (
-            '850e8400-e29b-41d4-a716-446655440003',
-            '750e8400-e29b-41d4-a716-446655440001',
-            'Order Processing Flow',
-            'Process and fulfill orders',
-            'draft',
-            '{
-                \"nodes\": [
-                    {\"id\": \"trigger-1\", \"type\": \"trigger\", \"config\": {\"type\": \"api\"}},
-                    {\"id\": \"condition-1\", \"type\": \"condition\", \"config\": {\"expression\": \"order.total > 100\"}},
-                    {\"id\": \"action-1\", \"type\": \"action\", \"config\": {\"type\": \"apply_discount\"}},
-                    {\"id\": \"action-2\", \"type\": \"action\", \"config\": {\"type\": \"process_payment\"}},
-                    {\"id\": \"action-3\", \"type\": \"action\", \"config\": {\"type\": \"send_confirmation\"}}
-                ],
-                \"edges\": [
-                    {\"source\": \"trigger-1\", \"target\": \"condition-1\"},
-                    {\"source\": \"condition-1\", \"target\": \"action-1\", \"label\": \"true\"},
-                    {\"source\": \"condition-1\", \"target\": \"action-2\", \"label\": \"false\"},
-                    {\"source\": \"action-1\", \"target\": \"action-2\"},
-                    {\"source\": \"action-2\", \"target\": \"action-3\"}
-                ]
-            }',
-            '{\"type\": \"api\", \"endpoint\": \"/api/orders\"}',
-            '{order, payment, ecommerce}',
-            '550e8400-e29b-41d4-a716-446655440001'
-        )
-    ON CONFLICT (id) DO NOTHING;"
-    
-    # Add workflow versions
-    run_sql "
-    INSERT INTO workflow_versions (workflow_id, version, definition, changelog, created_by)
-    VALUES 
-        ('850e8400-e29b-41d4-a716-446655440001', 1, '{\"nodes\": [], \"edges\": []}', 'Initial version', '550e8400-e29b-41d4-a716-446655440001'),
-        ('850e8400-e29b-41d4-a716-446655440002', 1, '{\"nodes\": [], \"edges\": []}', 'Initial version', '550e8400-e29b-41d4-a716-446655440002')
-    ON CONFLICT (workflow_id, version) DO NOTHING;"
-    
-    print_status "Workflows seeded ✓"
-}
+echo -e "${YELLOW}Creating sample node types...${NC}"
+$PSQL << 'EOF'
+-- Insert built-in node types
+INSERT INTO node.node_types (id, type, name, description, category, icon, version, is_builtin, is_public, status) VALUES
+('n0000001-0000-0000-0000-000000000001', 'manualTrigger', 'Manual Trigger', 'Manually trigger workflow execution', 'trigger', 'play', '1.0.0', true, true, 'active'),
+('n0000001-0000-0000-0000-000000000002', 'webhookTrigger', 'Webhook Trigger', 'Trigger workflow via HTTP webhook', 'trigger', 'webhook', '1.0.0', true, true, 'active'),
+('n0000001-0000-0000-0000-000000000003', 'scheduleTrigger', 'Schedule Trigger', 'Trigger workflow on a schedule', 'trigger', 'clock', '1.0.0', true, true, 'active'),
+('n0000001-0000-0000-0000-000000000004', 'http', 'HTTP Request', 'Make HTTP requests to external APIs', 'action', 'globe', '1.0.0', true, true, 'active'),
+('n0000001-0000-0000-0000-000000000005', 'if', 'IF', 'Conditional branching based on conditions', 'control', 'git-branch', '1.0.0', true, true, 'active'),
+('n0000001-0000-0000-0000-000000000006', 'switch', 'Switch', 'Route to different branches based on value', 'control', 'shuffle', '1.0.0', true, true, 'active'),
+('n0000001-0000-0000-0000-000000000007', 'loop', 'Loop', 'Iterate over array items', 'control', 'repeat', '1.0.0', true, true, 'active'),
+('n0000001-0000-0000-0000-000000000008', 'set', 'Set', 'Set or transform data values', 'transform', 'edit', '1.0.0', true, true, 'active'),
+('n0000001-0000-0000-0000-000000000009', 'merge', 'Merge', 'Merge data from multiple branches', 'control', 'git-merge', '1.0.0', true, true, 'active'),
+('n0000001-0000-0000-0000-000000000010', 'email', 'Email', 'Send emails via SMTP', 'action', 'mail', '1.0.0', true, true, 'active'),
+('n0000001-0000-0000-0000-000000000011', 'slack', 'Slack', 'Send messages to Slack', 'action', 'slack', '1.0.0', true, true, 'active'),
+('n0000001-0000-0000-0000-000000000012', 'database', 'Database', 'Execute database queries', 'action', 'database', '1.0.0', true, true, 'active'),
+('n0000001-0000-0000-0000-000000000013', 'wait', 'Wait', 'Pause execution for a duration', 'control', 'clock', '1.0.0', true, true, 'active'),
+('n0000001-0000-0000-0000-000000000014', 'json', 'JSON', 'Parse and manipulate JSON data', 'transform', 'code', '1.0.0', true, true, 'active'),
+('n0000001-0000-0000-0000-000000000015', 'crypto', 'Crypto', 'Encryption and hashing operations', 'transform', 'lock', '1.0.0', true, true, 'active')
+ON CONFLICT (type) DO NOTHING;
+EOF
 
-# Seed executions
-seed_executions() {
-    print_status "Seeding executions..."
-    
-    run_sql "
-    INSERT INTO executions (id, workflow_id, workflow_version, status, input, output, started_at, completed_at, duration_ms, triggered_by)
-    VALUES 
-        (
-            '950e8400-e29b-41d4-a716-446655440001',
-            '850e8400-e29b-41d4-a716-446655440001',
-            1,
-            'completed',
-            '{\"customer\": {\"email\": \"test@example.com\", \"name\": \"Test User\"}}',
-            '{\"email_sent\": true, \"crm_updated\": true}',
-            NOW() - INTERVAL '1 hour',
-            NOW() - INTERVAL '59 minutes',
-            60000,
-            '550e8400-e29b-41d4-a716-446655440001'
-        ),
-        (
-            '950e8400-e29b-41d4-a716-446655440002',
-            '850e8400-e29b-41d4-a716-446655440001',
-            1,
-            'failed',
-            '{\"customer\": {\"email\": \"invalid-email\", \"name\": \"Invalid User\"}}',
-            NULL,
-            NOW() - INTERVAL '2 hours',
-            NOW() - INTERVAL '119 minutes',
-            60000,
-            '550e8400-e29b-41d4-a716-446655440001'
-        ),
-        (
-            '950e8400-e29b-41d4-a716-446655440003',
-            '850e8400-e29b-41d4-a716-446655440002',
-            1,
-            'running',
-            '{\"source\": \"database_a\", \"target\": \"database_b\"}',
-            NULL,
-            NOW() - INTERVAL '30 minutes',
-            NULL,
-            NULL,
-            '550e8400-e29b-41d4-a716-446655440002'
-        )
-    ON CONFLICT (id) DO NOTHING;"
-    
-    # Add execution steps
-    run_sql "
-    INSERT INTO execution_steps (execution_id, node_id, node_type, status, input, output, started_at, completed_at, duration_ms)
-    VALUES 
-        ('950e8400-e29b-41d4-a716-446655440001', 'trigger-1', 'trigger', 'completed', '{}', '{}', NOW() - INTERVAL '1 hour', NOW() - INTERVAL '59 minutes 50 seconds', 10000),
-        ('950e8400-e29b-41d4-a716-446655440001', 'action-1', 'action', 'completed', '{}', '{}', NOW() - INTERVAL '59 minutes 50 seconds', NOW() - INTERVAL '59 minutes 30 seconds', 20000),
-        ('950e8400-e29b-41d4-a716-446655440001', 'action-2', 'action', 'completed', '{}', '{}', NOW() - INTERVAL '59 minutes 30 seconds', NOW() - INTERVAL '59 minutes', 30000)
-    ON CONFLICT DO NOTHING;"
-    
-    print_status "Executions seeded ✓"
-}
+echo -e "${YELLOW}Creating sample variables...${NC}"
+$PSQL << 'EOF'
+INSERT INTO variable.variables (key, value, type, description) VALUES
+('API_BASE_URL', 'https://api.example.com', 'string', 'Base URL for external API'),
+('DEFAULT_TIMEOUT', '30', 'number', 'Default timeout in seconds'),
+('DEBUG_MODE', 'false', 'boolean', 'Enable debug mode'),
+('API_KEY', 'sk-xxxx-xxxx-xxxx', 'secret', 'API key for external service')
+ON CONFLICT (key) DO NOTHING;
+EOF
 
-# Seed credentials
-seed_credentials() {
-    print_status "Seeding credentials..."
-    
-    # Note: In production, use proper encryption
-    run_sql "
-    INSERT INTO credentials (id, organization_id, name, type, encrypted_data, created_by)
-    VALUES 
-        ('a50e8400-e29b-41d4-a716-446655440001', '650e8400-e29b-41d4-a716-446655440001', 'SendGrid API', 'api_key', 'encrypted_sendgrid_key_here', '550e8400-e29b-41d4-a716-446655440001'),
-        ('a50e8400-e29b-41d4-a716-446655440002', '650e8400-e29b-41d4-a716-446655440001', 'Slack Webhook', 'webhook', 'encrypted_slack_webhook_here', '550e8400-e29b-41d4-a716-446655440001'),
-        ('a50e8400-e29b-41d4-a716-446655440003', '650e8400-e29b-41d4-a716-446655440002', 'Database Connection', 'database', 'encrypted_db_connection_here', '550e8400-e29b-41d4-a716-446655440002')
-    ON CONFLICT (id) DO NOTHING;"
-    
-    print_status "Credentials seeded ✓"
-}
-
-# Seed API keys
-seed_api_keys() {
-    print_status "Seeding API keys..."
-    
-    # Note: In production, use proper hashing
-    run_sql "
-    INSERT INTO api_keys (organization_id, name, key_hash, scopes, created_by)
-    VALUES 
-        ('650e8400-e29b-41d4-a716-446655440001', 'Production API Key', 'hashed_key_1', '{\"workflows:read\", \"workflows:write\", \"executions:read\"}', '550e8400-e29b-41d4-a716-446655440001'),
-        ('650e8400-e29b-41d4-a716-446655440001', 'Read-only API Key', 'hashed_key_2', '{\"workflows:read\", \"executions:read\"}', '550e8400-e29b-41d4-a716-446655440001'),
-        ('650e8400-e29b-41d4-a716-446655440002', 'Development API Key', 'hashed_key_3', '{\"*\"}', '550e8400-e29b-41d4-a716-446655440002')
-    ON CONFLICT DO NOTHING;"
-    
-    print_status "API keys seeded ✓"
-}
-
-# Seed webhooks
-seed_webhooks() {
-    print_status "Seeding webhooks..."
-    
-    run_sql "
-    INSERT INTO webhooks (organization_id, url, events, secret, is_active, created_by)
-    VALUES 
-        ('650e8400-e29b-41d4-a716-446655440001', 'https://example.com/webhook/linkflow', '{\"workflow.created\", \"workflow.updated\", \"execution.completed\"}', 'webhook_secret_1', true, '550e8400-e29b-41d4-a716-446655440001'),
-        ('650e8400-e29b-41d4-a716-446655440001', 'https://slack.com/webhook/notifications', '{\"execution.failed\"}', 'webhook_secret_2', true, '550e8400-e29b-41d4-a716-446655440001'),
-        ('650e8400-e29b-41d4-a716-446655440002', 'https://startup.com/linkflow/events', '{\"*\"}', 'webhook_secret_3', true, '550e8400-e29b-41d4-a716-446655440002')
-    ON CONFLICT DO NOTHING;"
-    
-    print_status "Webhooks seeded ✓"
-}
-
-# Print summary
-print_summary() {
-    print_status "Querying seeded data..."
-    
-    local user_count=$(PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -t -c "SELECT COUNT(*) FROM users;")
-    local org_count=$(PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -t -c "SELECT COUNT(*) FROM organizations;")
-    local workflow_count=$(PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -t -c "SELECT COUNT(*) FROM workflows;")
-    local execution_count=$(PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -t -c "SELECT COUNT(*) FROM executions;")
-    
-    echo ""
-    echo "================================"
-    echo "Database Seeding Complete! 🌱"
-    echo "================================"
-    echo "Summary:"
-    echo "  • Users:         $user_count"
-    echo "  • Organizations: $org_count"
-    echo "  • Workflows:     $workflow_count"
-    echo "  • Executions:    $execution_count"
-    echo ""
-    echo "Test Accounts:"
-    echo "  • admin@linkflow.local (Admin)"
-    echo "  • john.doe@linkflow.local (User)"
-    echo "  • jane.smith@linkflow.local (User)"
-    echo ""
-    echo "Note: All test passwords are 'password123'"
-    echo ""
-}
-
-# Main execution
-main() {
-    check_db_connection
-    
-    # Ask user if they want to clear existing data
-    read -p "Do you want to clear existing data before seeding? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        clear_data
-    fi
-    
-    print_status "Starting database seeding..."
-    
-    seed_users
-    seed_organizations
-    seed_projects
-    seed_workflows
-    seed_executions
-    seed_credentials
-    seed_api_keys
-    seed_webhooks
-    
-    print_summary
-}
-
-# Run main function
-main "$@"
+echo -e "${GREEN}Database seeding completed!${NC}"
+echo ""
+echo "Created:"
+echo "  - Admin user: admin@linkflow.io (password: admin123)"
+echo "  - Demo user: demo@linkflow.io (password: demo123)"
+echo "  - 2 sample workflows"
+echo "  - 15 built-in node types"
+echo "  - 4 global variables"

@@ -19,24 +19,22 @@ type TransformNodeExecutor struct {
 
 // TransformNodeConfig represents configuration for transform nodes
 type TransformNodeConfig struct {
-	Operations []TransformOperation `json:"operations"`
-	OutputFormat string             `json:"outputFormat"` // json, csv, xml
+	Operations   []TransformOperation `json:"operations"`
+	OutputFormat string               `json:"outputFormat"` // json, csv, xml
 }
 
 // TransformOperation represents a single transformation operation
 type TransformOperation struct {
-	Type       string                 `json:"type"` // map, filter, reduce, sort, group, join, split, merge
-	Field      string                 `json:"field"`
-	TargetField string                `json:"targetField"`
-	Expression string                 `json:"expression"`
-	Parameters map[string]interface{} `json:"parameters"`
+	Type        string                 `json:"type"` // map, filter, reduce, sort, group, join, split, merge
+	Field       string                 `json:"field"`
+	TargetField string                 `json:"targetField"`
+	Expression  string                 `json:"expression"`
+	Parameters  map[string]interface{} `json:"parameters"`
 }
 
 // NewTransformNodeExecutor creates a new transform node executor
-func NewTransformNodeExecutor(logger logger.Logger) *TransformNodeExecutor {
-	return &TransformNodeExecutor{
-		logger: logger,
-	}
+func NewTransformNodeExecutor() *TransformNodeExecutor {
+	return &TransformNodeExecutor{}
 }
 
 // Execute executes a transform node
@@ -45,10 +43,10 @@ func (e *TransformNodeExecutor) Execute(ctx context.Context, node Node, input ma
 	if err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
-	
+
 	// Start with input data
 	result := input
-	
+
 	// Apply each transformation in sequence
 	for _, op := range config.Operations {
 		transformed, err := e.applyTransformation(op, result)
@@ -57,12 +55,12 @@ func (e *TransformNodeExecutor) Execute(ctx context.Context, node Node, input ma
 		}
 		result = transformed
 	}
-	
+
 	// Format output if specified
 	if config.OutputFormat != "" && config.OutputFormat != "json" {
 		result = e.formatOutput(result, config.OutputFormat)
 	}
-	
+
 	return result, nil
 }
 
@@ -72,17 +70,17 @@ func (e *TransformNodeExecutor) ValidateInput(node Node, input map[string]interf
 	if err != nil {
 		return err
 	}
-	
+
 	if len(config.Operations) == 0 {
 		return fmt.Errorf("at least one transformation operation is required")
 	}
-	
+
 	// Validate each operation
 	for _, op := range config.Operations {
 		if op.Type == "" {
 			return fmt.Errorf("operation type is required")
 		}
-		
+
 		validTypes := []string{"map", "filter", "reduce", "sort", "group", "join", "split", "merge", "extract", "rename", "convert"}
 		valid := false
 		for _, t := range validTypes {
@@ -91,12 +89,12 @@ func (e *TransformNodeExecutor) ValidateInput(node Node, input map[string]interf
 				break
 			}
 		}
-		
+
 		if !valid {
 			return fmt.Errorf("invalid operation type: %s", op.Type)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -111,16 +109,16 @@ func (e *TransformNodeExecutor) parseConfig(config interface{}) (*TransformNodeC
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var transformConfig TransformNodeConfig
 	if err := json.Unmarshal(jsonData, &transformConfig); err != nil {
 		return nil, err
 	}
-	
+
 	if transformConfig.OutputFormat == "" {
 		transformConfig.OutputFormat = "json"
 	}
-	
+
 	return &transformConfig, nil
 }
 
@@ -155,12 +153,12 @@ func (e *TransformNodeExecutor) applyTransformation(op TransformOperation, data 
 // transformMap applies a mapping transformation
 func (e *TransformNodeExecutor) transformMap(op TransformOperation, data map[string]interface{}) (map[string]interface{}, error) {
 	result := make(map[string]interface{})
-	
+
 	// Copy all existing fields
 	for k, v := range data {
 		result[k] = v
 	}
-	
+
 	// Apply mapping
 	if op.Field != "" && op.TargetField != "" {
 		if value, exists := data[op.Field]; exists {
@@ -173,7 +171,7 @@ func (e *TransformNodeExecutor) transformMap(op TransformOperation, data map[str
 			}
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -182,12 +180,12 @@ func (e *TransformNodeExecutor) transformFilter(op TransformOperation, data map[
 	if op.Field == "" {
 		return data, nil
 	}
-	
+
 	value, exists := data[op.Field]
 	if !exists {
 		return data, nil
 	}
-	
+
 	// Filter arrays
 	if arr, ok := value.([]interface{}); ok {
 		filtered := []interface{}{}
@@ -196,7 +194,7 @@ func (e *TransformNodeExecutor) transformFilter(op TransformOperation, data map[
 				filtered = append(filtered, item)
 			}
 		}
-		
+
 		result := make(map[string]interface{})
 		for k, v := range data {
 			if k == op.Field {
@@ -207,12 +205,12 @@ func (e *TransformNodeExecutor) transformFilter(op TransformOperation, data map[
 		}
 		return result, nil
 	}
-	
+
 	// Filter single value
 	if e.evaluateCondition(op.Expression, value) {
 		return data, nil
 	}
-	
+
 	// Remove field if condition not met
 	result := make(map[string]interface{})
 	for k, v := range data {
@@ -228,21 +226,21 @@ func (e *TransformNodeExecutor) transformReduce(op TransformOperation, data map[
 	if op.Field == "" {
 		return data, nil
 	}
-	
+
 	value, exists := data[op.Field]
 	if !exists {
 		return data, nil
 	}
-	
+
 	arr, ok := value.([]interface{})
 	if !ok {
 		return data, nil
 	}
-	
+
 	// Perform reduction based on expression
 	var result interface{}
 	reduceType := op.Expression
-	
+
 	switch reduceType {
 	case "sum":
 		sum := 0.0
@@ -301,7 +299,7 @@ func (e *TransformNodeExecutor) transformReduce(op TransformOperation, data map[
 	default:
 		result = arr
 	}
-	
+
 	// Store result
 	output := make(map[string]interface{})
 	for k, v := range data {
@@ -316,7 +314,7 @@ func (e *TransformNodeExecutor) transformReduce(op TransformOperation, data map[
 			output[k] = v
 		}
 	}
-	
+
 	return output, nil
 }
 
@@ -339,24 +337,24 @@ func (e *TransformNodeExecutor) transformSplit(op TransformOperation, data map[s
 	if op.Field == "" {
 		return data, nil
 	}
-	
+
 	value, exists := data[op.Field]
 	if !exists {
 		return data, nil
 	}
-	
+
 	str, ok := value.(string)
 	if !ok {
 		return data, nil
 	}
-	
+
 	separator := ","
 	if sep, ok := op.Parameters["separator"].(string); ok {
 		separator = sep
 	}
-	
+
 	parts := strings.Split(str, separator)
-	
+
 	result := make(map[string]interface{})
 	for k, v := range data {
 		if k == op.Field {
@@ -372,7 +370,7 @@ func (e *TransformNodeExecutor) transformSplit(op TransformOperation, data map[s
 			result[k] = v
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -387,35 +385,35 @@ func (e *TransformNodeExecutor) transformExtract(op TransformOperation, data map
 	if op.Field == "" || op.Expression == "" {
 		return data, nil
 	}
-	
+
 	value, exists := data[op.Field]
 	if !exists {
 		return data, nil
 	}
-	
+
 	str, ok := value.(string)
 	if !ok {
 		return data, nil
 	}
-	
+
 	// Use regex to extract
 	re, err := regexp.Compile(op.Expression)
 	if err != nil {
 		return nil, fmt.Errorf("invalid regex: %w", err)
 	}
-	
+
 	matches := re.FindStringSubmatch(str)
-	
+
 	result := make(map[string]interface{})
 	for k, v := range data {
 		result[k] = v
 	}
-	
+
 	targetField := op.TargetField
 	if targetField == "" {
 		targetField = op.Field + "_extracted"
 	}
-	
+
 	if len(matches) > 0 {
 		if len(matches) == 1 {
 			result[targetField] = matches[0]
@@ -423,7 +421,7 @@ func (e *TransformNodeExecutor) transformExtract(op TransformOperation, data map
 			result[targetField] = matches[1:] // Skip full match
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -432,7 +430,7 @@ func (e *TransformNodeExecutor) transformRename(op TransformOperation, data map[
 	if op.Field == "" || op.TargetField == "" {
 		return data, nil
 	}
-	
+
 	result := make(map[string]interface{})
 	for k, v := range data {
 		if k == op.Field {
@@ -441,7 +439,7 @@ func (e *TransformNodeExecutor) transformRename(op TransformOperation, data map[
 			result[k] = v
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -450,22 +448,22 @@ func (e *TransformNodeExecutor) transformConvert(op TransformOperation, data map
 	if op.Field == "" {
 		return data, nil
 	}
-	
+
 	value, exists := data[op.Field]
 	if !exists {
 		return data, nil
 	}
-	
+
 	targetType := op.Expression
 	if targetType == "" {
 		if t, ok := op.Parameters["type"].(string); ok {
 			targetType = t
 		}
 	}
-	
+
 	var converted interface{}
 	var err error
-	
+
 	switch targetType {
 	case "string":
 		converted = fmt.Sprintf("%v", value)
@@ -486,11 +484,11 @@ func (e *TransformNodeExecutor) transformConvert(op TransformOperation, data map
 	default:
 		converted = value
 	}
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("conversion failed: %w", err)
 	}
-	
+
 	result := make(map[string]interface{})
 	for k, v := range data {
 		if k == op.Field {
@@ -499,7 +497,7 @@ func (e *TransformNodeExecutor) transformConvert(op TransformOperation, data map
 			result[k] = v
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -531,7 +529,7 @@ func (e *TransformNodeExecutor) evaluateCondition(condition string, value interf
 	if condition == "" {
 		return true
 	}
-	
+
 	// Check for simple comparisons
 	if strings.Contains(condition, ">") {
 		parts := strings.Split(condition, ">")
@@ -543,7 +541,7 @@ func (e *TransformNodeExecutor) evaluateCondition(condition string, value interf
 			}
 		}
 	}
-	
+
 	return true
 }
 

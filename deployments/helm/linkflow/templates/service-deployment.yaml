@@ -1,0 +1,129 @@
+{{- range $name, $service := .Values.services }}
+{{- if $service.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}-service
+  labels:
+    app: {{ $name }}-service
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/component: service
+spec:
+  replicas: {{ $service.replicaCount | default 2 }}
+  selector:
+    matchLabels:
+      app: {{ $name }}-service
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}-service
+        version: {{ $.Values.common.image.tag }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ $service.service.port }}"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: linkflow
+      containers:
+        - name: {{ $name }}
+          image: "{{ $.Values.common.image.registry }}/{{ $.Values.common.image.repository }}/{{ $name }}-service:{{ $.Values.common.image.tag }}"
+          imagePullPolicy: {{ $.Values.common.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $service.service.port }}
+              protocol: TCP
+          env:
+            - name: LINKFLOW_SERVER_PORT
+              value: "{{ $service.service.port }}"
+            - name: LINKFLOW_DATABASE_HOST
+              value: "{{ $.Release.Name }}-postgresql"
+            - name: LINKFLOW_DATABASE_PORT
+              value: "5432"
+            - name: LINKFLOW_DATABASE_NAME
+              value: "{{ $.Values.postgresql.auth.database }}"
+            - name: LINKFLOW_DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Release.Name }}-postgresql
+                  key: username
+            - name: LINKFLOW_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Release.Name }}-postgresql
+                  key: password
+            - name: LINKFLOW_REDIS_HOST
+              value: "{{ $.Release.Name }}-redis-master"
+            - name: LINKFLOW_REDIS_PORT
+              value: "6379"
+            - name: LINKFLOW_KAFKA_BROKERS
+              value: "{{ $.Release.Name }}-kafka:9092"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml ($service.resources | default $.Values.common.resources) | nindent 12 }}
+      {{- with $.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-service
+  labels:
+    app: {{ $name }}-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ $service.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ $name }}-service
+{{- if $service.autoscaling }}
+{{- if $service.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}-service-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}-service
+  minReplicas: {{ $service.autoscaling.minReplicas | default 2 }}
+  maxReplicas: {{ $service.autoscaling.maxReplicas | default 10 }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $service.autoscaling.targetCPUUtilizationPercentage | default 70 }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ $service.autoscaling.targetMemoryUtilizationPercentage | default 80 }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

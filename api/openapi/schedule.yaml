@@ -1,0 +1,275 @@
+openapi: 3.0.3
+info:
+  title: LinkFlow Schedule Service API
+  description: Workflow scheduling service
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8008
+    description: Local development
+
+tags:
+  - name: Schedules
+    description: Schedule management
+
+paths:
+  /api/v1/schedules:
+    get:
+      tags: [Schedules]
+      summary: List schedules
+      operationId: listSchedules
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workflowId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: active
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: List of schedules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Schedule'
+    post:
+      tags: [Schedules]
+      summary: Create schedule
+      operationId: createSchedule
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScheduleRequest'
+      responses:
+        '201':
+          description: Schedule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+
+  /api/v1/schedules/{id}:
+    get:
+      tags: [Schedules]
+      summary: Get schedule
+      operationId: getSchedule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Schedule details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+    put:
+      tags: [Schedules]
+      summary: Update schedule
+      operationId: updateSchedule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateScheduleRequest'
+      responses:
+        '200':
+          description: Schedule updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+    delete:
+      tags: [Schedules]
+      summary: Delete schedule
+      operationId: deleteSchedule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Schedule deleted
+
+  /api/v1/schedules/{id}/activate:
+    post:
+      tags: [Schedules]
+      summary: Activate schedule
+      operationId: activateSchedule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Schedule activated
+
+  /api/v1/schedules/{id}/deactivate:
+    post:
+      tags: [Schedules]
+      summary: Deactivate schedule
+      operationId: deactivateSchedule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Schedule deactivated
+
+  /api/v1/schedules/presets:
+    get:
+      tags: [Schedules]
+      summary: Get schedule presets
+      operationId: getSchedulePresets
+      responses:
+        '200':
+          description: List of schedule presets
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Schedule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        workflowId:
+          type: string
+          format: uuid
+        cronExpression:
+          type: string
+        timezone:
+          type: string
+        data:
+          type: object
+        isActive:
+          type: boolean
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        lastRunAt:
+          type: string
+          format: date-time
+        nextRunAt:
+          type: string
+          format: date-time
+        misfirePolicy:
+          type: string
+          enum: [skip, run_once, run_all]
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateScheduleRequest:
+      type: object
+      required: [name, workflowId, cronExpression]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        workflowId:
+          type: string
+          format: uuid
+        cronExpression:
+          type: string
+        timezone:
+          type: string
+          default: UTC
+        data:
+          type: object
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        misfirePolicy:
+          type: string
+          enum: [skip, run_once, run_all]
+          default: skip
+
+    UpdateScheduleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        cronExpression:
+          type: string
+        timezone:
+          type: string
+        data:
+          type: object
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        misfirePolicy:
+          type: string
+          enum: [skip, run_once, run_all]

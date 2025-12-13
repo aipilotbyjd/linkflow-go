@@ -7,15 +7,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/linkflow-go/internal/services/variable/handlers"
-	"github.com/linkflow-go/internal/services/variable/repository"
-	"github.com/linkflow-go/internal/services/variable/service"
+	"github.com/linkflow-go/internal/domain/variable"
 	"github.com/linkflow-go/pkg/config"
 	"github.com/linkflow-go/pkg/database"
-	"github.com/linkflow-go/pkg/events"
 	"github.com/linkflow-go/pkg/logger"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/redis/go-redis/v9"
 )
 
 type Server struct {
@@ -23,50 +19,23 @@ type Server struct {
 	logger     logger.Logger
 	httpServer *http.Server
 	db         *database.DB
-	redis      *redis.Client
-	eventBus   events.EventBus
 }
 
 func New(cfg *config.Config, log logger.Logger) (*Server, error) {
-	// Initialize database
 	db, err := database.New(cfg.Database.ToDatabaseConfig())
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	// Initialize Redis
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     cfg.Redis.Addr(),
-		Password: cfg.Redis.Password,
-		DB:       cfg.Redis.DB,
-		PoolSize: cfg.Redis.PoolSize,
-	})
-
-	if err := redisClient.Ping(context.Background()).Err(); err != nil {
-		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
+	if err := db.AutoMigrate(&variable.Variable{}); err != nil {
+		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
-	// Initialize event bus
-	eventBus, err := events.NewKafkaEventBus(cfg.Kafka.ToKafkaConfig())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create event bus: %w", err)
-	}
-
-	// Initialize repository and service
-	variableRepo := repository.NewVariableRepository(db)
-	// Use a default encryption key - in production, this should come from config/secrets
-	encryptionKey := "default-32-byte-encryption-key!!"
-	variableService := service.NewVariableService(variableRepo, eventBus, redisClient, log, encryptionKey)
-	variableHandlers := handlers.NewVariableHandlers(variableService, log)
-
-	// Setup router
-	router := setupRouter(variableHandlers, log)
+	router := setupRouter(db, log)
 
 	httpServer := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler:      router,
-		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
-		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
+		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
+		Handler: router,
 	}
 
 	return &Server{
@@ -74,57 +43,158 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 		logger:     log,
 		httpServer: httpServer,
 		db:         db,
-		redis:      redisClient,
-		eventBus:   eventBus,
 	}, nil
 }
 
-func setupRouter(h *handlers.VariableHandlers, log logger.Logger) *gin.Engine {
+func setupRouter(db *database.DB, log logger.Logger) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
-	router.Use(corsMiddleware())
-	router.Use(loggingMiddleware(log))
 
-	// Health checks
-	router.GET("/health", h.Health)
-	router.GET("/health/live", h.Health)
-	router.GET("/health/ready", h.Ready)
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
+	})
+	router.GET("/ready", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ready"})
+	})
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	// Variables API - matches n8n's structure
 	v1 := router.Group("/api/v1/variables")
 	{
-		v1.GET("", h.List)
-		v1.POST("", h.Create)
-		v1.GET("/:id", h.Get)
-		v1.PATCH("/:id", h.Update)
-		v1.DELETE("/:id", h.Delete)
+		v1.GET("", listVariables(db))
+		v1.POST("", createVariable(db))
+		v1.GET("/:key", getVariable(db))
+		v1.PUT("/:key", updateVariable(db))
+		v1.DELETE("/:key", deleteVariable(db))
 	}
 
 	return router
 }
 
+func listVariables(db *database.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var variables []variable.Variable
+		if err := db.Find(&variables).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		responses := make([]variable.VariableResponse, len(variables))
+		for i, v := range variables {
+			responses[i] = v.ToResponse()
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": responses})
+	}
+}
+
+func createVariable(db *database.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req struct {
+			Key         string `json:"key" binding:"required"`
+			Value       string `json:"value" binding:"required"`
+			Type        string `json:"type"`
+			Description string `json:"description"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		v := variable.NewVariable(req.Key, req.Value, req.Type)
+		v.Description = req.Description
+
+		if err := v.Validate(); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		if err := db.Create(c.Request.Context(), v); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusCreated, v.ToResponse())
+	}
+}
+
+func getVariable(db *database.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		key := c.Param("key")
+
+		var v variable.Variable
+		if err := db.Where("key = ?", key).First(&v).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "variable not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, v.ToResponse())
+	}
+}
+
+func updateVariable(db *database.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		key := c.Param("key")
+
+		var v variable.Variable
+		if err := db.Where("key = ?", key).First(&v).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "variable not found"})
+			return
+		}
+
+		var req struct {
+			Value       string `json:"value"`
+			Description string `json:"description"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		if req.Value != "" {
+			v.Value = req.Value
+		}
+		if req.Description != "" {
+			v.Description = req.Description
+		}
+		v.UpdatedAt = time.Now()
+
+		if err := db.Save(&v).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, v.ToResponse())
+	}
+}
+
+func deleteVariable(db *database.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		key := c.Param("key")
+
+		if err := db.Where("key = ?", key).Delete(&variable.Variable{}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.Status(http.StatusNoContent)
+	}
+}
+
 func (s *Server) Start() error {
-	s.logger.Info("Starting Variables service", "port", s.config.Server.Port)
+	s.logger.Info("Starting HTTP server", "port", s.config.Server.Port)
 	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		return fmt.Errorf("failed to start server: %w", err)
+		return fmt.Errorf("failed to start HTTP server: %w", err)
 	}
 	return nil
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
-	s.logger.Info("Shutting down Variables service...")
+	s.logger.Info("Shutting down server...")
 
 	if err := s.httpServer.Shutdown(ctx); err != nil {
-		return fmt.Errorf("failed to shutdown server: %w", err)
-	}
-
-	if err := s.eventBus.Close(); err != nil {
-		s.logger.Error("Failed to close event bus", "error", err)
-	}
-
-	if err := s.redis.Close(); err != nil {
-		s.logger.Error("Failed to close Redis", "error", err)
+		return fmt.Errorf("failed to shutdown HTTP server: %w", err)
 	}
 
 	if err := s.db.Close(); err != nil {
@@ -132,30 +202,4 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func corsMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-		c.Next()
-	}
-}
-
-func loggingMiddleware(log logger.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		start := time.Now()
-		c.Next()
-		log.Info("HTTP Request",
-			"method", c.Request.Method,
-			"path", c.Request.URL.Path,
-			"status", c.Writer.Status(),
-			"latency", time.Since(start),
-		)
-	}
 }

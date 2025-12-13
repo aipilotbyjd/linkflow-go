@@ -1,7 +1,7 @@
 # Variables
 DOCKER_REGISTRY ?= linkflow
 VERSION ?= latest
-SERVICES = auth user workflow execution executor node credential webhook schedule notification audit analytics storage search billing
+SERVICES = auth user workflow execution executor node credential webhook schedule notification audit analytics storage search billing variable websocket
 GO_FLAGS = -v -ldflags="-s -w"
 
 # Colors for output

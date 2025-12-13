@@ -1,14 +1,181 @@
 openapi: 3.0.3
 info:
   title: LinkFlow Auth Service API
-  description: Authentication and authorization API for LinkFlow workflow automation platform
+  description: Authentication and authorization service for LinkFlow
   version: 1.0.0
   contact:
     name: LinkFlow Team
+    email: support@linkflow.io
 
 servers:
-  - url: http://localhost:8080
-    description: Development server
+  - url: http://localhost:8001
+    description: Local development
+  - url: https://api.linkflow.io
+    description: Production
+
+tags:
+  - name: Authentication
+    description: User authentication endpoints
+  - name: OAuth
+    description: OAuth2 provider endpoints
+  - name: Sessions
+    description: Session management
+  - name: RBAC
+    description: Role-based access control
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/v1/auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a new user
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Email already exists
+
+
+  /api/v1/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login with email and password
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          description: Too many login attempts
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh access token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Logout current session
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logged out successfully
+
+  /api/v1/auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get current user
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /api/v1/auth/oauth/{provider}:
+    get:
+      tags: [OAuth]
+      summary: Initiate OAuth login
+      operationId: oauthLogin
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, github, microsoft]
+      responses:
+        '302':
+          description: Redirect to OAuth provider
+
+  /api/v1/auth/oauth/{provider}/callback:
+    get:
+      tags: [OAuth]
+      summary: OAuth callback
+      operationId: oauthCallback
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OAuth login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
 
 components:
   securitySchemes:
@@ -16,25 +183,21 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-    apiKeyAuth:
-      type: apiKey
-      in: header
-      name: X-API-Key
 
   schemas:
-    Error:
+    HealthResponse:
       type: object
       properties:
-        error:
+        status:
           type: string
+          example: healthy
+        timestamp:
+          type: string
+          format: date-time
 
     RegisterRequest:
       type: object
-      required:
-        - email
-        - password
-        - firstName
-        - lastName
+      required: [email, password, firstName, lastName]
       properties:
         email:
           type: string
@@ -49,9 +212,7 @@ components:
 
     LoginRequest:
       type: object
-      required:
-        - email
-        - password
+      required: [email, password]
       properties:
         email:
           type: string
@@ -59,7 +220,7 @@ components:
         password:
           type: string
 
-    LoginResponse:
+    AuthResponse:
       type: object
       properties:
         accessToken:
@@ -76,339 +237,49 @@ components:
       properties:
         id:
           type: string
+          format: uuid
         email:
+          type: string
+        username:
           type: string
         firstName:
           type: string
         lastName:
           type: string
+        avatar:
+          type: string
         emailVerified:
           type: boolean
-        status:
-          type: string
+        twoFactorEnabled:
+          type: boolean
+        roles:
+          type: array
+          items:
+            type: string
         createdAt:
           type: string
           format: date-time
 
-    RefreshTokenRequest:
-      type: object
-      required:
-        - refreshToken
-      properties:
-        refreshToken:
-          type: string
-
-    CreateAPIKeyRequest:
-      type: object
-      required:
-        - name
-      properties:
-        name:
-          type: string
-          maxLength: 255
-        permissions:
-          type: array
-          items:
-            type: string
-        expiresIn:
-          type: string
-          description: "Duration string like '30d', '90d', '1y'"
-
-    APIKeyResponse:
-      type: object
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        key:
-          type: string
-          description: "Only shown once at creation"
-        keyPrefix:
-          type: string
-        permissions:
-          type: array
-          items:
-            type: string
-        expiresAt:
-          type: string
-          format: date-time
-        createdAt:
-          type: string
-          format: date-time
-
-    APIKeyListResponse:
-      type: object
-      properties:
-        keys:
-          type: array
-          items:
-            $ref: '#/components/schemas/APIKeyResponse'
-
-paths:
-  /health:
-    get:
-      tags:
-        - Health
-      summary: Health check
-      responses:
-        '200':
-          description: Service healthy
-
-  /api/v1/auth/register:
-    post:
-      tags:
-        - Authentication
-      summary: Register a new user
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RegisterRequest'
-      responses:
-        '201':
-          description: User registered successfully
-        '400':
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: User already exists
-
-  /api/v1/auth/login:
-    post:
-      tags:
-        - Authentication
-      summary: Login with email and password
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LoginRequest'
-      responses:
-        '200':
-          description: Login successful
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LoginResponse'
-        '401':
-          description: Invalid credentials
-
-  /api/v1/auth/refresh:
-    post:
-      tags:
-        - Authentication
-      summary: Refresh access token
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RefreshTokenRequest'
-      responses:
-        '200':
-          description: Tokens refreshed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LoginResponse'
-        '401':
-          description: Invalid refresh token
-
-  /api/v1/auth/logout:
-    post:
-      tags:
-        - Authentication
-      summary: Logout and invalidate token
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Logged out successfully
-        '401':
-          description: Unauthorized
-
-  /api/v1/auth/me:
-    get:
-      tags:
-        - User
-      summary: Get current user profile
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: User profile
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '401':
-          description: Unauthorized
-
-  /api/v1/auth/verify-email:
-    post:
-      tags:
-        - Authentication
-      summary: Verify email with token
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                token:
-                  type: string
-      responses:
-        '200':
-          description: Email verified
-        '400':
-          description: Invalid token
-
-  /api/v1/auth/forgot-password:
-    post:
-      tags:
-        - Authentication
-      summary: Request password reset
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                email:
-                  type: string
-                  format: email
-      responses:
-        '200':
-          description: Reset email sent (or silently ignored if email not found)
-
-  /api/v1/auth/reset-password:
-    post:
-      tags:
-        - Authentication
-      summary: Reset password with token
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                token:
-                  type: string
-                password:
-                  type: string
-      responses:
-        '200':
-          description: Password reset successful
-        '400':
-          description: Invalid or expired token
-
-  /api/v1/auth/api-keys:
-    get:
-      tags:
-        - API Keys
-      summary: List all API keys
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: List of API keys
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APIKeyListResponse'
-        '401':
-          description: Unauthorized
-
-    post:
-      tags:
-        - API Keys
-      summary: Create new API key
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateAPIKeyRequest'
-      responses:
-        '201':
-          description: API key created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APIKeyResponse'
-        '401':
-          description: Unauthorized
-
-  /api/v1/auth/api-keys/{id}:
-    delete:
-      tags:
-        - API Keys
-      summary: Revoke an API key
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
           schema:
-            type: string
-      responses:
-        '200':
-          description: API key revoked
-        '401':
-          description: Unauthorized
-        '404':
-          description: API key not found
-
-  /api/v1/auth/sessions:
-    get:
-      tags:
-        - Sessions
-      summary: List active sessions
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: List of sessions
-        '401':
-          description: Unauthorized
-
-    delete:
-      tags:
-        - Sessions
-      summary: Revoke all sessions
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: All sessions revoked
-
-  /api/v1/auth/sessions/{sessionId}:
-    delete:
-      tags:
-        - Sessions
-      summary: Revoke specific session
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: sessionId
-          required: true
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
           schema:
-            type: string
-      responses:
-        '200':
-          description: Session revoked
-        '401':
-          description: Unauthorized
+            $ref: '#/components/schemas/Error'
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
