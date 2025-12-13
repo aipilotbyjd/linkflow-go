@@ -7,6 +7,24 @@
 bin/
 dist/
 
+# Service binaries (built at root)
+/auth
+/billing
+/credential
+/execution
+/executor
+/user
+/variable
+/workflow
+/webhook
+/schedule
+/node
+/notification
+/audit
+/analytics
+/search
+/storage
+
 # Test binary, built with `go test -c`
 *.test
 
