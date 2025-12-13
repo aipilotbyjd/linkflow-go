@@ -1,7 +1,7 @@
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
-  name: linkflow-vs
+  name: linkflow-api
   namespace: linkflow
 spec:
   hosts:
@@ -10,9 +10,10 @@ spec:
   gateways:
   - linkflow-gateway
   http:
+  # Auth Service
   - match:
     - uri:
-        prefix: /api/auth
+        prefix: /api/v1/auth
     route:
     - destination:
         host: auth-service
@@ -22,38 +23,180 @@ spec:
     retries:
       attempts: 3
       perTryTimeout: 10s
+
+  # User Service
   - match:
     - uri:
-        prefix: /api/workflows
-    route:
-    - destination:
-        host: workflow-service
-        port:
-          number: 8080
-    timeout: 30s
-  - match:
-    - uri:
-        prefix: /api/executions
-    route:
-    - destination:
-        host: execution-service
-        port:
-          number: 8080
-    timeout: 60s
-  - match:
-    - uri:
-        prefix: /api/users
+        prefix: /api/v1/users
     route:
     - destination:
         host: user-service
         port:
           number: 8080
     timeout: 30s
+
+  # Workflow Service
+  - match:
+    - uri:
+        prefix: /api/v1/workflows
+    route:
+    - destination:
+        host: workflow-service
+        port:
+          number: 8080
+    timeout: 30s
+
+  # Execution Service
+  - match:
+    - uri:
+        prefix: /api/v1/executions
+    route:
+    - destination:
+        host: execution-service
+        port:
+          number: 8080
+    timeout: 120s  # Longer timeout for executions
+    retries:
+      attempts: 2
+      perTryTimeout: 60s
+
+  # Node Service
+  - match:
+    - uri:
+        prefix: /api/v1/nodes
+    route:
+    - destination:
+        host: node-service
+        port:
+          number: 8080
+    timeout: 30s
+
+  # Credential Service
+  - match:
+    - uri:
+        prefix: /api/v1/credentials
+    route:
+    - destination:
+        host: credential-service
+        port:
+          number: 8080
+    timeout: 30s
+
+  # Variable Service
+  - match:
+    - uri:
+        prefix: /api/v1/variables
+    route:
+    - destination:
+        host: variable-service
+        port:
+          number: 8080
+    timeout: 30s
+
+  # Webhook Service (incoming webhooks)
+  - match:
+    - uri:
+        prefix: /webhook
+    route:
+    - destination:
+        host: webhook-service
+        port:
+          number: 8080
+    timeout: 30s
+
+  # Webhook Management API
+  - match:
+    - uri:
+        prefix: /api/v1/webhooks
+    route:
+    - destination:
+        host: webhook-service
+        port:
+          number: 8080
+    timeout: 30s
+
+  # Schedule Service
+  - match:
+    - uri:
+        prefix: /api/v1/schedules
+    route:
+    - destination:
+        host: schedule-service
+        port:
+          number: 8080
+    timeout: 30s
+
+  # Notification Service
+  - match:
+    - uri:
+        prefix: /api/v1/notifications
+    route:
+    - destination:
+        host: notification-service
+        port:
+          number: 8080
+    timeout: 30s
+
+  # Audit Service
+  - match:
+    - uri:
+        prefix: /api/v1/audit
+    route:
+    - destination:
+        host: audit-service
+        port:
+          number: 8080
+    timeout: 30s
+
+  # Analytics Service
+  - match:
+    - uri:
+        prefix: /api/v1/analytics
+    route:
+    - destination:
+        host: analytics-service
+        port:
+          number: 8080
+    timeout: 30s
+
+  # Search Service
+  - match:
+    - uri:
+        prefix: /api/v1/search
+    route:
+    - destination:
+        host: search-service
+        port:
+          number: 8080
+    timeout: 30s
+
+  # Storage Service
+  - match:
+    - uri:
+        prefix: /api/v1/storage
+    route:
+    - destination:
+        host: storage-service
+        port:
+          number: 8080
+    timeout: 60s
+
+  # Billing Service
+  - match:
+    - uri:
+        prefix: /api/v1/billing
+    route:
+    - destination:
+        host: billing-service
+        port:
+          number: 8080
+    timeout: 30s
 ---
+# Canary deployment for workflow service
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
-  name: workflow-service-vs
+  name: workflow-service-internal
   namespace: linkflow
 spec:
   hosts:
@@ -61,32 +204,27 @@ spec:
   http:
   - match:
     - headers:
-        canary:
+        x-canary:
           exact: "true"
     route:
     - destination:
         host: workflow-service
         subset: v2
-      weight: 100
   - route:
     - destination:
         host: workflow-service
         subset: v1
-      weight: 90
+      weight: 95
     - destination:
         host: workflow-service
         subset: v2
-      weight: 10  # 10% canary traffic
-    fault:
-      delay:
-        percentage:
-          value: 0.1
-        fixedDelay: 5s  # Inject 5s delay for 0.1% of requests
+      weight: 5
 ---
+# Circuit breaker for execution service
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
-  name: execution-service-vs
+  name: execution-service-internal
   namespace: linkflow
 spec:
   hosts:
@@ -96,8 +234,7 @@ spec:
     - destination:
         host: execution-service
         subset: stable
-    circuitBreaker:
-      consecutiveErrors: 5
-      interval: 30s
-      baseEjectionTime: 30s
-      maxEjectionPercent: 50
+    retries:
+      attempts: 3
+      perTryTimeout: 30s
+      retryOn: 5xx,reset,connect-failure

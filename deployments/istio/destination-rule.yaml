@@ -1,7 +1,31 @@
+# Default destination rule for all services
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
 metadata:
-  name: auth-service-dr
+  name: linkflow-default
+  namespace: linkflow
+spec:
+  host: "*.linkflow.svc.cluster.local"
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 100
+    loadBalancer:
+      simple: ROUND_ROBIN
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# Auth Service
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: auth-service
   namespace: linkflow
 spec:
   host: auth-service
@@ -12,24 +36,22 @@ spec:
       http:
         http1MaxPendingRequests: 100
         http2MaxRequests: 100
-        maxRequestsPerConnection: 2
     loadBalancer:
       simple: ROUND_ROBIN
     outlierDetection:
-      consecutiveErrors: 5
+      consecutive5xxErrors: 5
       interval: 30s
       baseEjectionTime: 30s
-      maxEjectionPercent: 50
-      minHealthPercent: 30
   subsets:
   - name: v1
     labels:
       version: v1
 ---
+# Workflow Service (with canary support)
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
 metadata:
-  name: workflow-service-dr
+  name: workflow-service
   namespace: linkflow
 spec:
   host: workflow-service
@@ -40,17 +62,12 @@ spec:
       http:
         http1MaxPendingRequests: 200
         http2MaxRequests: 200
-        maxRequestsPerConnection: 2
     loadBalancer:
-      consistentHash:
-        httpCookie:
-          name: "session-cookie"
-          ttl: 3600s
+      simple: ROUND_ROBIN
     outlierDetection:
-      consecutiveErrors: 5
+      consecutive5xxErrors: 5
       interval: 30s
       baseEjectionTime: 30s
-      maxEjectionPercent: 50
   subsets:
   - name: v1
     labels:
@@ -59,10 +76,11 @@ spec:
     labels:
       version: v2
 ---
+# Execution Service (high capacity)
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
 metadata:
-  name: execution-service-dr
+  name: execution-service
   namespace: linkflow
 spec:
   host: execution-service
@@ -73,40 +91,66 @@ spec:
       http:
         http1MaxPendingRequests: 500
         http2MaxRequests: 500
-        maxRequestsPerConnection: 2
     loadBalancer:
       simple: LEAST_REQUEST
     outlierDetection:
       consecutive5xxErrors: 3
       interval: 30s
       baseEjectionTime: 30s
-      maxEjectionPercent: 50
-      splitExternalLocalOriginErrors: true
   subsets:
   - name: stable
     labels:
-      version: stable
+      version: v1
 ---
+# Executor Service (highest capacity)
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
 metadata:
-  name: redis-dr
+  name: executor-service
   namespace: linkflow
 spec:
-  host: redis-service
+  host: executor-service
   trafficPolicy:
     connectionPool:
       tcp:
-        maxConnections: 50
+        maxConnections: 1000
+      http:
+        http1MaxPendingRequests: 1000
+        http2MaxRequests: 1000
+    loadBalancer:
+      simple: LEAST_REQUEST
     outlierDetection:
-      consecutiveErrors: 3
+      consecutive5xxErrors: 5
       interval: 30s
-      baseEjectionTime: 30s
+      baseEjectionTime: 60s
 ---
+# Webhook Service
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
 metadata:
-  name: postgres-dr
+  name: webhook-service
+  namespace: linkflow
+spec:
+  host: webhook-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 200
+      http:
+        http1MaxPendingRequests: 200
+        http2MaxRequests: 200
+    loadBalancer:
+      simple: ROUND_ROBIN
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+---
+# Database connections
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: postgres-service
   namespace: linkflow
 spec:
   host: postgres-service
@@ -114,7 +158,15 @@ spec:
     connectionPool:
       tcp:
         maxConnections: 100
-    outlierDetection:
-      consecutiveErrors: 5
-      interval: 30s
-      baseEjectionTime: 30s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: redis-service
+  namespace: linkflow
+spec:
+  host: redis-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 50
