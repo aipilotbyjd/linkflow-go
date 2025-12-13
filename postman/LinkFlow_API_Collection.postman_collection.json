@@ -1,0 +1,511 @@
+{
+  "info": {
+    "_postman_id": "linkflow-api-collection",
+    "name": "LinkFlow API Collection",
+    "description": "Complete API collection for LinkFlow workflow automation platform",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{"key": "token", "value": "{{accessToken}}", "type": "string"}]
+  },
+  "variable": [
+    {"key": "baseUrl", "value": "http://localhost"},
+    {"key": "authPort", "value": "8001"},
+    {"key": "userPort", "value": "8002"},
+    {"key": "workflowPort", "value": "8003"},
+    {"key": "executionPort", "value": "8004"},
+    {"key": "webhookPort", "value": "8007"},
+    {"key": "schedulePort", "value": "8008"},
+    {"key": "variablePort", "value": "8009"},
+    {"key": "credentialPort", "value": "8010"},
+    {"key": "nodePort", "value": "8011"},
+    {"key": "executorPort", "value": "8012"},
+    {"key": "notificationPort", "value": "8013"},
+    {"key": "analyticsPort", "value": "8014"},
+    {"key": "websocketPort", "value": "8020"},
+    {"key": "accessToken", "value": ""},
+    {"key": "refreshToken", "value": ""},
+    {"key": "userId", "value": ""},
+    {"key": "workflowId", "value": ""},
+    {"key": "executionId", "value": ""},
+    {"key": "webhookId", "value": ""},
+    {"key": "scheduleId", "value": ""},
+    {"key": "credentialId", "value": ""}
+  ],
+  "item": [
+    {
+      "name": "🔐 Auth Service",
+      "description": "Authentication and authorization endpoints (Port 8001)",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{baseUrl}}:{{authPort}}/health", "host": ["{{baseUrl}}"], "port": "{{authPort}}", "path": ["health"]}
+          }
+        },
+        {
+          "name": "Register User",
+          "event": [{"listen": "test", "script": {"exec": ["var jsonData = pm.response.json();", "if (jsonData.accessToken) {", "    pm.collectionVariables.set('accessToken', jsonData.accessToken);", "    pm.collectionVariables.set('refreshToken', jsonData.refreshToken);", "    pm.collectionVariables.set('userId', jsonData.user.id);", "}", "pm.test('Status code is 201', function() { pm.response.to.have.status(201); });"]}}],
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\",\n  \"username\": \"testuser\"\n}"},
+            "url": {"raw": "{{baseUrl}}:{{authPort}}/api/v1/auth/register", "host": ["{{baseUrl}}"], "port": "{{authPort}}", "path": ["api", "v1", "auth", "register"]}
+          }
+        },
+        {
+          "name": "Login",
+          "event": [{"listen": "test", "script": {"exec": ["var jsonData = pm.response.json();", "if (jsonData.accessToken) {", "    pm.collectionVariables.set('accessToken', jsonData.accessToken);", "    pm.collectionVariables.set('refreshToken', jsonData.refreshToken);", "    pm.collectionVariables.set('userId', jsonData.user.id);", "}", "pm.test('Status code is 200', function() { pm.response.to.have.status(200); });", "pm.test('Has access token', function() { pm.expect(jsonData.accessToken).to.exist; });"]}}],
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"SecurePass123!\"\n}"},
+            "url": {"raw": "{{baseUrl}}:{{authPort}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "port": "{{authPort}}", "path": ["api", "v1", "auth", "login"]}
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{baseUrl}}:{{authPort}}/api/v1/auth/me", "host": ["{{baseUrl}}"], "port": "{{authPort}}", "path": ["api", "v1", "auth", "me"]}
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [{"listen": "test", "script": {"exec": ["var jsonData = pm.response.json();", "if (jsonData.accessToken) {", "    pm.collectionVariables.set('accessToken', jsonData.accessToken);", "    pm.collectionVariables.set('refreshToken', jsonData.refreshToken);", "}"]}}],
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"},
+            "url": {"raw": "{{baseUrl}}:{{authPort}}/api/v1/auth/refresh", "host": ["{{baseUrl}}"], "port": "{{authPort}}", "path": ["api", "v1", "auth", "refresh"]}
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {"raw": "{{baseUrl}}:{{authPort}}/api/v1/auth/logout", "host": ["{{baseUrl}}"], "port": "{{authPort}}", "path": ["api", "v1", "auth", "logout"]}
+          }
+        },
+        {
+          "name": "OAuth - Google",
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{baseUrl}}:{{authPort}}/api/v1/auth/oauth/google", "host": ["{{baseUrl}}"], "port": "{{authPort}}", "path": ["api", "v1", "auth", "oauth", "google"]}
+          }
+        },
+        {
+          "name": "OAuth - GitHub",
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{baseUrl}}:{{authPort}}/api/v1/auth/oauth/github", "host": ["{{baseUrl}}"], "port": "{{authPort}}", "path": ["api", "v1", "auth", "oauth", "github"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "👤 User Service",
+      "description": "User management, teams, and roles (Port 8002)",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{userPort}}/health", "host": ["{{baseUrl}}"], "port": "{{userPort}}", "path": ["health"]}}
+        },
+        {
+          "name": "List Users",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{userPort}}/api/v1/users?page=1&limit=20", "host": ["{{baseUrl}}"], "port": "{{userPort}}", "path": ["api", "v1", "users"], "query": [{"key": "page", "value": "1"}, {"key": "limit", "value": "20"}]}}
+        },
+        {
+          "name": "Get User by ID",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{userPort}}/api/v1/users/{{userId}}", "host": ["{{baseUrl}}"], "port": "{{userPort}}", "path": ["api", "v1", "users", "{{userId}}"]}}
+        },
+        {
+          "name": "Update User",
+          "request": {"method": "PUT", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"firstName\": \"Updated\",\n  \"lastName\": \"Name\"\n}"}, "url": {"raw": "{{baseUrl}}:{{userPort}}/api/v1/users/{{userId}}", "host": ["{{baseUrl}}"], "port": "{{userPort}}", "path": ["api", "v1", "users", "{{userId}}"]}}
+        },
+        {
+          "name": "Get User Permissions",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{userPort}}/api/v1/users/{{userId}}/permissions", "host": ["{{baseUrl}}"], "port": "{{userPort}}", "path": ["api", "v1", "users", "{{userId}}", "permissions"]}}
+        },
+        {
+          "name": "List Teams",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{userPort}}/api/v1/users/teams", "host": ["{{baseUrl}}"], "port": "{{userPort}}", "path": ["api", "v1", "users", "teams"]}}
+        },
+        {
+          "name": "Create Team",
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"name\": \"My Team\",\n  \"description\": \"Team description\"\n}"}, "url": {"raw": "{{baseUrl}}:{{userPort}}/api/v1/users/teams", "host": ["{{baseUrl}}"], "port": "{{userPort}}", "path": ["api", "v1", "users", "teams"]}}
+        },
+        {
+          "name": "List Roles",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{userPort}}/api/v1/users/roles", "host": ["{{baseUrl}}"], "port": "{{userPort}}", "path": ["api", "v1", "users", "roles"]}}
+        },
+        {
+          "name": "List Permissions",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{userPort}}/api/v1/users/permissions", "host": ["{{baseUrl}}"], "port": "{{userPort}}", "path": ["api", "v1", "users", "permissions"]}}
+        }
+      ]
+    },
+    {
+      "name": "⚡ Workflow Service",
+      "description": "Workflow CRUD and management (Port 8003)",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{workflowPort}}/health", "host": ["{{baseUrl}}"], "port": "{{workflowPort}}", "path": ["health"]}}
+        },
+        {
+          "name": "List Workflows",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{workflowPort}}/api/v1/workflows?page=1&limit=20", "host": ["{{baseUrl}}"], "port": "{{workflowPort}}", "path": ["api", "v1", "workflows"], "query": [{"key": "page", "value": "1"}, {"key": "limit", "value": "20"}]}}
+        },
+        {
+          "name": "Create Workflow",
+          "event": [{"listen": "test", "script": {"exec": ["var jsonData = pm.response.json();", "if (jsonData.id) { pm.collectionVariables.set('workflowId', jsonData.id); }"]}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"name\": \"My First Workflow\",\n  \"description\": \"A sample workflow\",\n  \"nodes\": [\n    {\n      \"id\": \"node-1\",\n      \"name\": \"Start\",\n      \"type\": \"trigger\",\n      \"position\": {\"x\": 100, \"y\": 100},\n      \"parameters\": {}\n    },\n    {\n      \"id\": \"node-2\",\n      \"name\": \"HTTP Request\",\n      \"type\": \"http\",\n      \"position\": {\"x\": 300, \"y\": 100},\n      \"parameters\": {\"url\": \"https://api.example.com\", \"method\": \"GET\"}\n    }\n  ],\n  \"connections\": [\n    {\"source\": \"node-1\", \"target\": \"node-2\"}\n  ],\n  \"tags\": [\"sample\", \"test\"]\n}"}, "url": {"raw": "{{baseUrl}}:{{workflowPort}}/api/v1/workflows", "host": ["{{baseUrl}}"], "port": "{{workflowPort}}", "path": ["api", "v1", "workflows"]}}
+        },
+        {
+          "name": "Get Workflow",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{workflowPort}}/api/v1/workflows/{{workflowId}}", "host": ["{{baseUrl}}"], "port": "{{workflowPort}}", "path": ["api", "v1", "workflows", "{{workflowId}}"]}}
+        },
+        {
+          "name": "Update Workflow",
+          "request": {"method": "PUT", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"name\": \"Updated Workflow Name\",\n  \"description\": \"Updated description\"\n}"}, "url": {"raw": "{{baseUrl}}:{{workflowPort}}/api/v1/workflows/{{workflowId}}", "host": ["{{baseUrl}}"], "port": "{{workflowPort}}", "path": ["api", "v1", "workflows", "{{workflowId}}"]}}
+        },
+        {
+          "name": "Activate Workflow",
+          "request": {"method": "POST", "url": {"raw": "{{baseUrl}}:{{workflowPort}}/api/v1/workflows/{{workflowId}}/activate", "host": ["{{baseUrl}}"], "port": "{{workflowPort}}", "path": ["api", "v1", "workflows", "{{workflowId}}", "activate"]}}
+        },
+        {
+          "name": "Deactivate Workflow",
+          "request": {"method": "POST", "url": {"raw": "{{baseUrl}}:{{workflowPort}}/api/v1/workflows/{{workflowId}}/deactivate", "host": ["{{baseUrl}}"], "port": "{{workflowPort}}", "path": ["api", "v1", "workflows", "{{workflowId}}", "deactivate"]}}
+        },
+        {
+          "name": "Execute Workflow",
+          "event": [{"listen": "test", "script": {"exec": ["var jsonData = pm.response.json();", "if (jsonData.executionId) { pm.collectionVariables.set('executionId', jsonData.executionId); }"]}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"data\": {\"input\": \"test data\"}\n}"}, "url": {"raw": "{{baseUrl}}:{{workflowPort}}/api/v1/workflows/{{workflowId}}/execute", "host": ["{{baseUrl}}"], "port": "{{workflowPort}}", "path": ["api", "v1", "workflows", "{{workflowId}}", "execute"]}}
+        },
+        {
+          "name": "Delete Workflow",
+          "request": {"method": "DELETE", "url": {"raw": "{{baseUrl}}:{{workflowPort}}/api/v1/workflows/{{workflowId}}", "host": ["{{baseUrl}}"], "port": "{{workflowPort}}", "path": ["api", "v1", "workflows", "{{workflowId}}"]}}
+        }
+      ]
+    },
+    {
+      "name": "🚀 Execution Service",
+      "description": "Workflow execution management (Port 8004)",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{executionPort}}/health", "host": ["{{baseUrl}}"], "port": "{{executionPort}}", "path": ["health"]}}
+        },
+        {
+          "name": "List Executions",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{executionPort}}/api/v1/executions?page=1&limit=20", "host": ["{{baseUrl}}"], "port": "{{executionPort}}", "path": ["api", "v1", "executions"], "query": [{"key": "page", "value": "1"}, {"key": "limit", "value": "20"}]}}
+        },
+        {
+          "name": "List Executions by Workflow",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{executionPort}}/api/v1/executions?workflowId={{workflowId}}", "host": ["{{baseUrl}}"], "port": "{{executionPort}}", "path": ["api", "v1", "executions"], "query": [{"key": "workflowId", "value": "{{workflowId}}"}]}}
+        },
+        {
+          "name": "Get Execution",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{executionPort}}/api/v1/executions/{{executionId}}", "host": ["{{baseUrl}}"], "port": "{{executionPort}}", "path": ["api", "v1", "executions", "{{executionId}}"]}}
+        },
+        {
+          "name": "Cancel Execution",
+          "request": {"method": "POST", "url": {"raw": "{{baseUrl}}:{{executionPort}}/api/v1/executions/{{executionId}}/cancel", "host": ["{{baseUrl}}"], "port": "{{executionPort}}", "path": ["api", "v1", "executions", "{{executionId}}", "cancel"]}}
+        },
+        {
+          "name": "Retry Execution",
+          "request": {"method": "POST", "url": {"raw": "{{baseUrl}}:{{executionPort}}/api/v1/executions/{{executionId}}/retry", "host": ["{{baseUrl}}"], "port": "{{executionPort}}", "path": ["api", "v1", "executions", "{{executionId}}", "retry"]}}
+        },
+        {
+          "name": "Get Execution Logs",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{executionPort}}/api/v1/executions/{{executionId}}/logs", "host": ["{{baseUrl}}"], "port": "{{executionPort}}", "path": ["api", "v1", "executions", "{{executionId}}", "logs"]}}
+        }
+      ]
+    },
+    {
+      "name": "🔗 Webhook Service",
+      "description": "Webhook management (Port 8007)",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{webhookPort}}/health", "host": ["{{baseUrl}}"], "port": "{{webhookPort}}", "path": ["health"]}}
+        },
+        {
+          "name": "List Webhooks",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{webhookPort}}/api/v1/webhooks", "host": ["{{baseUrl}}"], "port": "{{webhookPort}}", "path": ["api", "v1", "webhooks"]}}
+        },
+        {
+          "name": "Create Webhook",
+          "event": [{"listen": "test", "script": {"exec": ["var jsonData = pm.response.json();", "if (jsonData.id) { pm.collectionVariables.set('webhookId', jsonData.id); }"]}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"workflowId\": \"{{workflowId}}\",\n  \"nodeId\": \"webhook-trigger\",\n  \"path\": \"my-webhook\",\n  \"method\": \"POST\",\n  \"requireAuth\": false,\n  \"rateLimit\": 100\n}"}, "url": {"raw": "{{baseUrl}}:{{webhookPort}}/api/v1/webhooks", "host": ["{{baseUrl}}"], "port": "{{webhookPort}}", "path": ["api", "v1", "webhooks"]}}
+        },
+        {
+          "name": "Get Webhook",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{webhookPort}}/api/v1/webhooks/{{webhookId}}", "host": ["{{baseUrl}}"], "port": "{{webhookPort}}", "path": ["api", "v1", "webhooks", "{{webhookId}}"]}}
+        },
+        {
+          "name": "Delete Webhook",
+          "request": {"method": "DELETE", "url": {"raw": "{{baseUrl}}:{{webhookPort}}/api/v1/webhooks/{{webhookId}}", "host": ["{{baseUrl}}"], "port": "{{webhookPort}}", "path": ["api", "v1", "webhooks", "{{webhookId}}"]}}
+        },
+        {
+          "name": "Trigger Webhook (Test)",
+          "request": {"auth": {"type": "noauth"}, "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"event\": \"test\",\n  \"data\": {\"message\": \"Hello from webhook\"}\n}"}, "url": {"raw": "{{baseUrl}}:{{webhookPort}}/webhook/my-webhook", "host": ["{{baseUrl}}"], "port": "{{webhookPort}}", "path": ["webhook", "my-webhook"]}}
+        }
+      ]
+    },
+    {
+      "name": "⏰ Schedule Service",
+      "description": "Workflow scheduling (Port 8008)",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{schedulePort}}/health", "host": ["{{baseUrl}}"], "port": "{{schedulePort}}", "path": ["health"]}}
+        },
+        {
+          "name": "List Schedules",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{schedulePort}}/api/v1/schedules", "host": ["{{baseUrl}}"], "port": "{{schedulePort}}", "path": ["api", "v1", "schedules"]}}
+        },
+        {
+          "name": "Create Schedule",
+          "event": [{"listen": "test", "script": {"exec": ["var jsonData = pm.response.json();", "if (jsonData.id) { pm.collectionVariables.set('scheduleId', jsonData.id); }"]}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"name\": \"Daily Workflow\",\n  \"description\": \"Runs every day at 9 AM\",\n  \"workflowId\": \"{{workflowId}}\",\n  \"cronExpression\": \"0 9 * * *\",\n  \"timezone\": \"UTC\",\n  \"misfirePolicy\": \"skip\"\n}"}, "url": {"raw": "{{baseUrl}}:{{schedulePort}}/api/v1/schedules", "host": ["{{baseUrl}}"], "port": "{{schedulePort}}", "path": ["api", "v1", "schedules"]}}
+        },
+        {
+          "name": "Get Schedule",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{schedulePort}}/api/v1/schedules/{{scheduleId}}", "host": ["{{baseUrl}}"], "port": "{{schedulePort}}", "path": ["api", "v1", "schedules", "{{scheduleId}}"]}}
+        },
+        {
+          "name": "Update Schedule",
+          "request": {"method": "PUT", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"name\": \"Updated Schedule\",\n  \"cronExpression\": \"0 10 * * *\"\n}"}, "url": {"raw": "{{baseUrl}}:{{schedulePort}}/api/v1/schedules/{{scheduleId}}", "host": ["{{baseUrl}}"], "port": "{{schedulePort}}", "path": ["api", "v1", "schedules", "{{scheduleId}}"]}}
+        },
+        {
+          "name": "Activate Schedule",
+          "request": {"method": "POST", "url": {"raw": "{{baseUrl}}:{{schedulePort}}/api/v1/schedules/{{scheduleId}}/activate", "host": ["{{baseUrl}}"], "port": "{{schedulePort}}", "path": ["api", "v1", "schedules", "{{scheduleId}}", "activate"]}}
+        },
+        {
+          "name": "Deactivate Schedule",
+          "request": {"method": "POST", "url": {"raw": "{{baseUrl}}:{{schedulePort}}/api/v1/schedules/{{scheduleId}}/deactivate", "host": ["{{baseUrl}}"], "port": "{{schedulePort}}", "path": ["api", "v1", "schedules", "{{scheduleId}}", "deactivate"]}}
+        },
+        {
+          "name": "Get Schedule Presets",
+          "request": {"auth": {"type": "noauth"}, "method": "GET", "url": {"raw": "{{baseUrl}}:{{schedulePort}}/api/v1/schedules/presets", "host": ["{{baseUrl}}"], "port": "{{schedulePort}}", "path": ["api", "v1", "schedules", "presets"]}}
+        },
+        {
+          "name": "Delete Schedule",
+          "request": {"method": "DELETE", "url": {"raw": "{{baseUrl}}:{{schedulePort}}/api/v1/schedules/{{scheduleId}}", "host": ["{{baseUrl}}"], "port": "{{schedulePort}}", "path": ["api", "v1", "schedules", "{{scheduleId}}"]}}
+        }
+      ]
+    },
+    {
+      "name": "🔑 Credential Service",
+      "description": "Secure credential management (Port 8010)",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{credentialPort}}/health", "host": ["{{baseUrl}}"], "port": "{{credentialPort}}", "path": ["health"]}}
+        },
+        {
+          "name": "List Credentials",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{credentialPort}}/api/v1/credentials", "host": ["{{baseUrl}}"], "port": "{{credentialPort}}", "path": ["api", "v1", "credentials"]}}
+        },
+        {
+          "name": "List Credential Types",
+          "request": {"auth": {"type": "noauth"}, "method": "GET", "url": {"raw": "{{baseUrl}}:{{credentialPort}}/api/v1/credentials/types", "host": ["{{baseUrl}}"], "port": "{{credentialPort}}", "path": ["api", "v1", "credentials", "types"]}}
+        },
+        {
+          "name": "Create Credential",
+          "event": [{"listen": "test", "script": {"exec": ["var jsonData = pm.response.json();", "if (jsonData.id) { pm.collectionVariables.set('credentialId', jsonData.id); }"]}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"name\": \"My API Key\",\n  \"type\": \"api_key\",\n  \"description\": \"API key for external service\",\n  \"data\": {\n    \"apiKey\": \"your-api-key-here\"\n  },\n  \"isShared\": false\n}"}, "url": {"raw": "{{baseUrl}}:{{credentialPort}}/api/v1/credentials", "host": ["{{baseUrl}}"], "port": "{{credentialPort}}", "path": ["api", "v1", "credentials"]}}
+        },
+        {
+          "name": "Get Credential",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{credentialPort}}/api/v1/credentials/{{credentialId}}", "host": ["{{baseUrl}}"], "port": "{{credentialPort}}", "path": ["api", "v1", "credentials", "{{credentialId}}"]}}
+        },
+        {
+          "name": "Update Credential",
+          "request": {"method": "PUT", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"name\": \"Updated Credential Name\",\n  \"description\": \"Updated description\"\n}"}, "url": {"raw": "{{baseUrl}}:{{credentialPort}}/api/v1/credentials/{{credentialId}}", "host": ["{{baseUrl}}"], "port": "{{credentialPort}}", "path": ["api", "v1", "credentials", "{{credentialId}}"]}}
+        },
+        {
+          "name": "Test Credential",
+          "request": {"method": "POST", "url": {"raw": "{{baseUrl}}:{{credentialPort}}/api/v1/credentials/{{credentialId}}/test", "host": ["{{baseUrl}}"], "port": "{{credentialPort}}", "path": ["api", "v1", "credentials", "{{credentialId}}", "test"]}}
+        },
+        {
+          "name": "Delete Credential",
+          "request": {"method": "DELETE", "url": {"raw": "{{baseUrl}}:{{credentialPort}}/api/v1/credentials/{{credentialId}}", "host": ["{{baseUrl}}"], "port": "{{credentialPort}}", "path": ["api", "v1", "credentials", "{{credentialId}}"]}}
+        }
+      ]
+    },
+    {
+      "name": "📦 Variable Service",
+      "description": "Environment variables management (Port 8009)",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{variablePort}}/health", "host": ["{{baseUrl}}"], "port": "{{variablePort}}", "path": ["health"]}}
+        },
+        {
+          "name": "List Variables",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{variablePort}}/api/v1/variables", "host": ["{{baseUrl}}"], "port": "{{variablePort}}", "path": ["api", "v1", "variables"]}}
+        },
+        {
+          "name": "Create Variable",
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"key\": \"API_BASE_URL\",\n  \"value\": \"https://api.example.com\",\n  \"description\": \"Base URL for external API\",\n  \"isSecret\": false\n}"}, "url": {"raw": "{{baseUrl}}:{{variablePort}}/api/v1/variables", "host": ["{{baseUrl}}"], "port": "{{variablePort}}", "path": ["api", "v1", "variables"]}}
+        },
+        {
+          "name": "Get Variable",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{variablePort}}/api/v1/variables/API_BASE_URL", "host": ["{{baseUrl}}"], "port": "{{variablePort}}", "path": ["api", "v1", "variables", "API_BASE_URL"]}}
+        },
+        {
+          "name": "Update Variable",
+          "request": {"method": "PUT", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"value\": \"https://api-v2.example.com\",\n  \"description\": \"Updated base URL\"\n}"}, "url": {"raw": "{{baseUrl}}:{{variablePort}}/api/v1/variables/API_BASE_URL", "host": ["{{baseUrl}}"], "port": "{{variablePort}}", "path": ["api", "v1", "variables", "API_BASE_URL"]}}
+        },
+        {
+          "name": "Delete Variable",
+          "request": {"method": "DELETE", "url": {"raw": "{{baseUrl}}:{{variablePort}}/api/v1/variables/API_BASE_URL", "host": ["{{baseUrl}}"], "port": "{{variablePort}}", "path": ["api", "v1", "variables", "API_BASE_URL"]}}
+        }
+      ]
+    },
+    {
+      "name": "🧩 Node Service",
+      "description": "Node types and registry (Port 8011)",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{nodePort}}/health", "host": ["{{baseUrl}}"], "port": "{{nodePort}}", "path": ["health"]}}
+        },
+        {
+          "name": "List Node Types",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{nodePort}}/api/v1/nodes/types", "host": ["{{baseUrl}}"], "port": "{{nodePort}}", "path": ["api", "v1", "nodes", "types"]}}
+        },
+        {
+          "name": "Get Node Type",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{nodePort}}/api/v1/nodes/types/http", "host": ["{{baseUrl}}"], "port": "{{nodePort}}", "path": ["api", "v1", "nodes", "types", "http"]}}
+        },
+        {
+          "name": "List Node Categories",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{nodePort}}/api/v1/nodes/categories", "host": ["{{baseUrl}}"], "port": "{{nodePort}}", "path": ["api", "v1", "nodes", "categories"]}}
+        },
+        {
+          "name": "Search Nodes",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{nodePort}}/api/v1/nodes/search?q=http", "host": ["{{baseUrl}}"], "port": "{{nodePort}}", "path": ["api", "v1", "nodes", "search"], "query": [{"key": "q", "value": "http"}]}}
+        }
+      ]
+    },
+    {
+      "name": "⚙️ Executor Service",
+      "description": "Workflow executor (Port 8012)",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{executorPort}}/health", "host": ["{{baseUrl}}"], "port": "{{executorPort}}", "path": ["health"]}}
+        },
+        {
+          "name": "Get Executor Status",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{executorPort}}/api/v1/executor/status", "host": ["{{baseUrl}}"], "port": "{{executorPort}}", "path": ["api", "v1", "executor", "status"]}}
+        },
+        {
+          "name": "Get Active Executions",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{executorPort}}/api/v1/executor/active", "host": ["{{baseUrl}}"], "port": "{{executorPort}}", "path": ["api", "v1", "executor", "active"]}}
+        }
+      ]
+    },
+    {
+      "name": "🔔 Notification Service",
+      "description": "Notifications management (Port 8013)",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{notificationPort}}/health", "host": ["{{baseUrl}}"], "port": "{{notificationPort}}", "path": ["health"]}}
+        },
+        {
+          "name": "List Notifications",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{notificationPort}}/api/v1/notifications", "host": ["{{baseUrl}}"], "port": "{{notificationPort}}", "path": ["api", "v1", "notifications"]}}
+        },
+        {
+          "name": "Get Unread Count",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{notificationPort}}/api/v1/notifications/unread/count", "host": ["{{baseUrl}}"], "port": "{{notificationPort}}", "path": ["api", "v1", "notifications", "unread", "count"]}}
+        },
+        {
+          "name": "Mark All as Read",
+          "request": {"method": "POST", "url": {"raw": "{{baseUrl}}:{{notificationPort}}/api/v1/notifications/read-all", "host": ["{{baseUrl}}"], "port": "{{notificationPort}}", "path": ["api", "v1", "notifications", "read-all"]}}
+        },
+        {
+          "name": "Get Notification Preferences",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{notificationPort}}/api/v1/notifications/preferences", "host": ["{{baseUrl}}"], "port": "{{notificationPort}}", "path": ["api", "v1", "notifications", "preferences"]}}
+        },
+        {
+          "name": "Update Notification Preferences",
+          "request": {"method": "PUT", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"email\": true,\n  \"push\": true,\n  \"inApp\": true,\n  \"executionFailed\": true,\n  \"executionCompleted\": false\n}"}, "url": {"raw": "{{baseUrl}}:{{notificationPort}}/api/v1/notifications/preferences", "host": ["{{baseUrl}}"], "port": "{{notificationPort}}", "path": ["api", "v1", "notifications", "preferences"]}}
+        }
+      ]
+    },
+    {
+      "name": "📊 Analytics Service",
+      "description": "Analytics and metrics (Port 8014)",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{analyticsPort}}/health", "host": ["{{baseUrl}}"], "port": "{{analyticsPort}}", "path": ["health"]}}
+        },
+        {
+          "name": "Get Dashboard Stats",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{analyticsPort}}/api/v1/analytics/dashboard", "host": ["{{baseUrl}}"], "port": "{{analyticsPort}}", "path": ["api", "v1", "analytics", "dashboard"]}}
+        },
+        {
+          "name": "Get Execution Stats",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{analyticsPort}}/api/v1/analytics/executions?period=7d", "host": ["{{baseUrl}}"], "port": "{{analyticsPort}}", "path": ["api", "v1", "analytics", "executions"], "query": [{"key": "period", "value": "7d"}]}}
+        },
+        {
+          "name": "Get Workflow Stats",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{analyticsPort}}/api/v1/analytics/workflows/{{workflowId}}", "host": ["{{baseUrl}}"], "port": "{{analyticsPort}}", "path": ["api", "v1", "analytics", "workflows", "{{workflowId}}"]}}
+        }
+      ]
+    },
+    {
+      "name": "🌐 WebSocket Service",
+      "description": "Real-time WebSocket connections (Port 8020)",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{websocketPort}}/health", "host": ["{{baseUrl}}"], "port": "{{websocketPort}}", "path": ["health"]}}
+        },
+        {
+          "name": "Get Connection Info",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{websocketPort}}/api/v1/ws/info", "host": ["{{baseUrl}}"], "port": "{{websocketPort}}", "path": ["api", "v1", "ws", "info"]}}
+        }
+      ]
+    },
+    {
+      "name": "🏥 All Health Checks",
+      "description": "Quick health check for all services",
+      "item": [
+        {"name": "Auth Health", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{authPort}}/health", "host": ["{{baseUrl}}"], "port": "{{authPort}}", "path": ["health"]}}},
+        {"name": "User Health", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{userPort}}/health", "host": ["{{baseUrl}}"], "port": "{{userPort}}", "path": ["health"]}}},
+        {"name": "Workflow Health", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{workflowPort}}/health", "host": ["{{baseUrl}}"], "port": "{{workflowPort}}", "path": ["health"]}}},
+        {"name": "Execution Health", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{executionPort}}/health", "host": ["{{baseUrl}}"], "port": "{{executionPort}}", "path": ["health"]}}},
+        {"name": "Webhook Health", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{webhookPort}}/health", "host": ["{{baseUrl}}"], "port": "{{webhookPort}}", "path": ["health"]}}},
+        {"name": "Schedule Health", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{schedulePort}}/health", "host": ["{{baseUrl}}"], "port": "{{schedulePort}}", "path": ["health"]}}},
+        {"name": "Variable Health", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{variablePort}}/health", "host": ["{{baseUrl}}"], "port": "{{variablePort}}", "path": ["health"]}}},
+        {"name": "Credential Health", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{credentialPort}}/health", "host": ["{{baseUrl}}"], "port": "{{credentialPort}}", "path": ["health"]}}},
+        {"name": "Node Health", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{nodePort}}/health", "host": ["{{baseUrl}}"], "port": "{{nodePort}}", "path": ["health"]}}},
+        {"name": "Executor Health", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{executorPort}}/health", "host": ["{{baseUrl}}"], "port": "{{executorPort}}", "path": ["health"]}}},
+        {"name": "Notification Health", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{notificationPort}}/health", "host": ["{{baseUrl}}"], "port": "{{notificationPort}}", "path": ["health"]}}},
+        {"name": "Analytics Health", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{analyticsPort}}/health", "host": ["{{baseUrl}}"], "port": "{{analyticsPort}}", "path": ["health"]}}},
+        {"name": "WebSocket Health", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}:{{websocketPort}}/health", "host": ["{{baseUrl}}"], "port": "{{websocketPort}}", "path": ["health"]}}}
+      ]
+    }
+  ]
+}
