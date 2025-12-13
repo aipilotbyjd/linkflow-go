@@ -39,9 +39,9 @@ RUN addgroup -g 1001 -S linkflow && \
 
 USER linkflow
 
-# Health check
+# Health check - use the same port the service is configured to listen on
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:${LINKFLOW_SERVER_PORT:-8080}/health/live || exit 1
 
 # Expose port
 EXPOSE 8080

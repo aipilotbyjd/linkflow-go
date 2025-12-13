@@ -89,10 +89,10 @@ func setupRouter(log logger.Logger) *gin.Engine {
 	router.Use(loggingMiddleware(log))
 	
 	// Health checks
-	router.GET("/health", func(c *gin.Context) {
+	router.GET("/health/live", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
 	})
-	router.GET("/ready", func(c *gin.Context) {
+	router.GET("/health/ready", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ready"})
 	})
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))

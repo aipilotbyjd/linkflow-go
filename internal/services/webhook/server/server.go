@@ -107,8 +107,8 @@ func setupRouter(h *handlers.WebhookHandlers, wr *router.WebhookRouter, log logg
 	r.Use(loggingMiddleware(log))
 	
 	// Health checks
-	r.GET("/health", h.Health)
-	r.GET("/ready", h.Ready)
+	r.GET("/health/live", h.Health)
+	r.GET("/health/ready", h.Ready)
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	
 	// Webhook endpoint (dynamic routing)

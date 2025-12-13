@@ -61,10 +61,10 @@ func setupRouter(hub *Hub, log logger.Logger) *gin.Engine {
 	router.Use(gin.Recovery())
 
 	// Health checks
-	router.GET("/health", func(c *gin.Context) {
+	router.GET("/health/live", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
 	})
-	router.GET("/ready", func(c *gin.Context) {
+	router.GET("/health/ready", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ready", "connections": hub.ConnectionCount()})
 	})
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))

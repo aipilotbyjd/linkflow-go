@@ -206,11 +206,6 @@ stop-local: ## Stop local services
 logs: ## Show logs for local services
 	@docker-compose logs -f
 
-.PHONY: k8s-deploy
-k8s-deploy: ## Deploy to Kubernetes
-	@echo "${GREEN}Deploying to Kubernetes...${NC}"
-	@kubectl apply -f deployments/k8s/
-
 .PHONY: k8s-delete
 k8s-delete: ## Delete from Kubernetes
 	@echo "${RED}Deleting from Kubernetes...${NC}"

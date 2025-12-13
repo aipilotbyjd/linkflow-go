@@ -117,8 +117,8 @@ func setupRouter(h *handlers.NotificationHandlers, log logger.Logger) *gin.Engin
 	router.Use(loggingMiddleware(log))
 	
 	// Health checks
-	router.GET("/health", h.Health)
-	router.GET("/ready", h.Ready)
+	router.GET("/health/live", h.Health)
+	router.GET("/health/ready", h.Ready)
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	
 	// API routes

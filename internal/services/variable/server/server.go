@@ -50,10 +50,10 @@ func setupRouter(db *database.DB, log logger.Logger) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 
-	router.GET("/health", func(c *gin.Context) {
+	router.GET("/health/live", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
 	})
-	router.GET("/ready", func(c *gin.Context) {
+	router.GET("/health/ready", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ready"})
 	})
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
