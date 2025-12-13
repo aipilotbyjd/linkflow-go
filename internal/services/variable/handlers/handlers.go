@@ -9,27 +9,27 @@ import (
 	"github.com/linkflow-go/pkg/logger"
 )
 
-type Handlers struct {
-	service *service.Service
+type VariableHandlers struct {
+	service *service.VariableService
 	logger  logger.Logger
 }
 
-func NewHandlers(svc *service.Service, logger logger.Logger) *Handlers {
-	return &Handlers{
+func NewVariableHandlers(svc *service.VariableService, logger logger.Logger) *VariableHandlers {
+	return &VariableHandlers{
 		service: svc,
 		logger:  logger,
 	}
 }
 
-func (h *Handlers) Health(c *gin.Context) {
+func (h *VariableHandlers) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "healthy"})
 }
 
-func (h *Handlers) Ready(c *gin.Context) {
+func (h *VariableHandlers) Ready(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ready"})
 }
 
-func (h *Handlers) List(c *gin.Context) {
+func (h *VariableHandlers) List(c *gin.Context) {
 	variables, err := h.service.List(c.Request.Context())
 	if err != nil {
 		h.logger.Error("Failed to list variables", "error", err)
@@ -45,7 +45,7 @@ func (h *Handlers) List(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": response})
 }
 
-func (h *Handlers) Get(c *gin.Context) {
+func (h *VariableHandlers) Get(c *gin.Context) {
 	id := c.Param("id")
 
 	v, err := h.service.Get(c.Request.Context(), id)
@@ -57,7 +57,7 @@ func (h *Handlers) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, v.ToResponse())
 }
 
-func (h *Handlers) Create(c *gin.Context) {
+func (h *VariableHandlers) Create(c *gin.Context) {
 	var req service.CreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -78,7 +78,7 @@ func (h *Handlers) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, v.ToResponse())
 }
 
-func (h *Handlers) Update(c *gin.Context) {
+func (h *VariableHandlers) Update(c *gin.Context) {
 	id := c.Param("id")
 
 	var req service.UpdateRequest
@@ -97,7 +97,7 @@ func (h *Handlers) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, v.ToResponse())
 }
 
-func (h *Handlers) Delete(c *gin.Context) {
+func (h *VariableHandlers) Delete(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := h.service.Delete(c.Request.Context(), id); err != nil {

@@ -53,14 +53,14 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	}
 
 	// Initialize repository and service
-	repo := repository.NewRepository(db)
+	variableRepo := repository.NewVariableRepository(db)
 	// Use a default encryption key - in production, this should come from config/secrets
 	encryptionKey := "default-32-byte-encryption-key!!"
-	svc := service.NewService(repo, eventBus, redisClient, log, encryptionKey)
-	h := handlers.NewHandlers(svc, log)
+	variableService := service.NewVariableService(variableRepo, eventBus, redisClient, log, encryptionKey)
+	variableHandlers := handlers.NewVariableHandlers(variableService, log)
 
 	// Setup router
-	router := setupRouter(h, log)
+	router := setupRouter(variableHandlers, log)
 
 	httpServer := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
@@ -79,7 +79,7 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	}, nil
 }
 
-func setupRouter(h *handlers.Handlers, log logger.Logger) *gin.Engine {
+func setupRouter(h *handlers.VariableHandlers, log logger.Logger) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())

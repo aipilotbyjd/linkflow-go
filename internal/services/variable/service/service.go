@@ -17,15 +17,15 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type Service struct {
-	repo          *repository.Repository
+type VariableService struct {
+	repo          *repository.VariableRepository
 	eventBus      events.EventBus
 	redis         *redis.Client
 	logger        logger.Logger
 	encryptionKey []byte
 }
 
-func NewService(repo *repository.Repository, eventBus events.EventBus, redis *redis.Client, logger logger.Logger, encryptionKey string) *Service {
+func NewVariableService(repo *repository.VariableRepository, eventBus events.EventBus, redis *redis.Client, logger logger.Logger, encryptionKey string) *VariableService {
 	key := []byte(encryptionKey)
 	if len(key) != 32 {
 		newKey := make([]byte, 32)
@@ -33,7 +33,7 @@ func NewService(repo *repository.Repository, eventBus events.EventBus, redis *re
 		key = newKey
 	}
 
-	return &Service{
+	return &VariableService{
 		repo:          repo,
 		eventBus:      eventBus,
 		redis:         redis,
@@ -42,7 +42,7 @@ func NewService(repo *repository.Repository, eventBus events.EventBus, redis *re
 	}
 }
 
-func (s *Service) Create(ctx context.Context, req CreateRequest) (*variable.Variable, error) {
+func (s *VariableService) Create(ctx context.Context, req CreateRequest) (*variable.Variable, error) {
 	if err := variable.ValidateKey(req.Key); err != nil {
 		return nil, err
 	}
@@ -83,19 +83,19 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*variable.Vari
 	return v, nil
 }
 
-func (s *Service) Get(ctx context.Context, id string) (*variable.Variable, error) {
+func (s *VariableService) Get(ctx context.Context, id string) (*variable.Variable, error) {
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *Service) GetByKey(ctx context.Context, key string) (*variable.Variable, error) {
+func (s *VariableService) GetByKey(ctx context.Context, key string) (*variable.Variable, error) {
 	return s.repo.GetByKey(ctx, key)
 }
 
-func (s *Service) List(ctx context.Context) ([]*variable.Variable, error) {
+func (s *VariableService) List(ctx context.Context) ([]*variable.Variable, error) {
 	return s.repo.List(ctx)
 }
 
-func (s *Service) Update(ctx context.Context, id string, req UpdateRequest) (*variable.Variable, error) {
+func (s *VariableService) Update(ctx context.Context, id string, req UpdateRequest) (*variable.Variable, error) {
 	v, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -146,7 +146,7 @@ func (s *Service) Update(ctx context.Context, id string, req UpdateRequest) (*va
 	return v, nil
 }
 
-func (s *Service) Delete(ctx context.Context, id string) error {
+func (s *VariableService) Delete(ctx context.Context, id string) error {
 	v, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return err
@@ -168,7 +168,7 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *Service) GetDecryptedValue(ctx context.Context, key string) (string, error) {
+func (s *VariableService) GetDecryptedValue(ctx context.Context, key string) (string, error) {
 	v, err := s.repo.GetByKey(ctx, key)
 	if err != nil {
 		return "", err
@@ -185,7 +185,7 @@ func (s *Service) GetDecryptedValue(ctx context.Context, key string) (string, er
 	return v.Value, nil
 }
 
-func (s *Service) GetAllForExecution(ctx context.Context) (map[string]string, error) {
+func (s *VariableService) GetAllForExecution(ctx context.Context) (map[string]string, error) {
 	cached, err := s.redis.HGetAll(ctx, "variables:all").Result()
 	if err == nil && len(cached) > 0 {
 		return cached, nil
@@ -218,7 +218,7 @@ func (s *Service) GetAllForExecution(ctx context.Context) (map[string]string, er
 	return result, nil
 }
 
-func (s *Service) encrypt(plaintext string) (string, error) {
+func (s *VariableService) encrypt(plaintext string) (string, error) {
 	block, err := aes.NewCipher(s.encryptionKey)
 	if err != nil {
 		return "", err
@@ -238,7 +238,7 @@ func (s *Service) encrypt(plaintext string) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-func (s *Service) decrypt(ciphertext string) (string, error) {
+func (s *VariableService) decrypt(ciphertext string) (string, error) {
 	data, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
 		return "", err
@@ -268,7 +268,7 @@ func (s *Service) decrypt(ciphertext string) (string, error) {
 	return string(plaintext), nil
 }
 
-func (s *Service) invalidateCache(ctx context.Context) {
+func (s *VariableService) invalidateCache(ctx context.Context) {
 	s.redis.Del(ctx, "variables:all")
 }
 
