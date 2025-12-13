@@ -10,6 +10,7 @@ import (
 	"github.com/linkflow-go/internal/services/workflow/handlers"
 	"github.com/linkflow-go/internal/services/workflow/repository"
 	"github.com/linkflow-go/internal/services/workflow/service"
+	"github.com/linkflow-go/internal/services/workflow/variables"
 	"github.com/linkflow-go/pkg/config"
 	"github.com/linkflow-go/pkg/database"
 	"github.com/linkflow-go/pkg/events"
@@ -62,8 +63,13 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	// Initialize handlers
 	workflowHandlers := handlers.NewWorkflowHandlers(workflowService, log)
 
+	// Initialize variables service and handlers
+	variablesRepo := variables.NewRepository(db)
+	variablesService := variables.NewService(variablesRepo, eventBus, redisClient, log)
+	variablesHandlers := variables.NewHandlers(variablesService, log)
+
 	// Setup HTTP server
-	router := setupRouter(workflowHandlers, log)
+	router := setupRouter(workflowHandlers, variablesHandlers, log)
 
 	httpServer := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
@@ -87,7 +93,7 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	}, nil
 }
 
-func setupRouter(h *handlers.WorkflowHandlers, log logger.Logger) *gin.Engine {
+func setupRouter(h *handlers.WorkflowHandlers, vh *variables.Handlers, log logger.Logger) *gin.Engine {
 	router := gin.New()
 
 	// Middleware
@@ -99,6 +105,10 @@ func setupRouter(h *handlers.WorkflowHandlers, log logger.Logger) *gin.Engine {
 	router.GET("/health", h.Health)
 	router.GET("/ready", h.Ready)
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
+	// Register variables routes
+	v1api := router.Group("/api/v1")
+	variables.RegisterRoutes(v1api, vh)
 
 	// API routes
 	v1 := router.Group("/api/v1/workflows")
