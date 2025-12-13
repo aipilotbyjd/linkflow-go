@@ -218,6 +218,9 @@ func (b *EventBuilder) Build() Event {
 	return b.event
 }
 
+// HandlerFunc is an alias for EventHandler for backward compatibility
+type HandlerFunc = EventHandler
+
 // Common event types
 const (
 	// User events
@@ -240,6 +243,7 @@ const (
 	ExecutionFailed       = "execution.failed"
 	ExecutionCancelled    = "execution.cancelled"
 	ExecutionStateChanged = "execution.state_changed"
+	ExecutionQueued       = "execution.queued"
 
 	// Node events
 	NodeExecutionStarted   = "node.execution.started"

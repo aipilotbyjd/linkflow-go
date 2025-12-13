@@ -152,7 +152,7 @@ func (qm *QueueManager) Enqueue(ctx context.Context, request *workflow.Execution
 	}
 	
 	// Add to queue
-	queue.Push(item)
+	queue.Enqueue(item)
 	atomic.AddInt64(&qm.queuedCount, 1)
 	
 	// Persist to Redis if enabled
@@ -190,11 +190,11 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*workflow.ExecutionRequest
 	var item *QueueItem
 	
 	if !qm.highQueue.IsEmpty() {
-		item = qm.highQueue.Pop()
+		item = qm.highQueue.Dequeue()
 	} else if !qm.normalQueue.IsEmpty() {
-		item = qm.normalQueue.Pop()
+		item = qm.normalQueue.Dequeue()
 	} else if !qm.lowQueue.IsEmpty() {
-		item = qm.lowQueue.Pop()
+		item = qm.lowQueue.Dequeue()
 	}
 	
 	if item == nil {
@@ -387,7 +387,7 @@ func (qm *QueueManager) restoreQueues(ctx context.Context) error {
 		
 		// Restore to queue
 		for _, item := range items {
-			queue.Push(item)
+			queue.Enqueue(item)
 		}
 		
 		qm.logger.Info("Restored queue", "queue", key, "items", len(items))

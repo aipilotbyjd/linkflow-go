@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/linkflow-go/internal/domain/workflow"
 	"github.com/linkflow-go/pkg/events"
 	"github.com/linkflow-go/pkg/logger"
 	"github.com/redis/go-redis/v9"

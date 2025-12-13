@@ -301,7 +301,7 @@ func (t *Tracer) handleExecutionCompleted(ctx context.Context, event events.Even
 func (t *Tracer) handleExecutionFailed(ctx context.Context, event events.Event) error {
 	executionID := event.AggregateID
 	errMsg, _ := event.Payload["error"].(string)
-	t.EndSpan(executionID, fmt.Errorf(errMsg))
+	t.EndSpan(executionID, fmt.Errorf("%s", errMsg))
 	return nil
 }
 
@@ -315,7 +315,7 @@ func (t *Tracer) handleNodeExecutionStarted(ctx context.Context, event events.Ev
 }
 
 func (t *Tracer) handleNodeExecutionCompleted(ctx context.Context, event events.Event) error {
-	executionID, _ := event.AggregateID.(string)
+	executionID := event.AggregateID
 	nodeID, _ := event.Payload["nodeId"].(string)
 	status, _ := event.Payload["status"].(string)
 	

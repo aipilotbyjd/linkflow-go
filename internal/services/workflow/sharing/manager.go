@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/linkflow-go/internal/domain/workflow"
 	"github.com/linkflow-go/pkg/database"
 	"github.com/linkflow-go/pkg/logger"
 	"gorm.io/gorm"

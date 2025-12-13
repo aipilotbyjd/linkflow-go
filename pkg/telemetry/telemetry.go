@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -127,10 +128,7 @@ func (t *Telemetry) HTTPMiddleware() gin.HandlerFunc {
 		
 		// Set span status based on HTTP status
 		if c.Writer.Status() >= 400 {
-			span.SetStatus(trace.Status{
-				Code:        trace.StatusCodeError,
-				Description: fmt.Sprintf("HTTP %d", c.Writer.Status()),
-			})
+			span.SetStatus(codes.Error, fmt.Sprintf("HTTP %d", c.Writer.Status()))
 		}
 	}
 }
@@ -153,11 +151,8 @@ func (s *Span) AddEvent(name string, attrs ...attribute.KeyValue) {
 }
 
 // SetStatus sets the span status
-func (s *Span) SetStatus(code trace.StatusCode, description string) {
-	s.span.SetStatus(trace.Status{
-		Code:        code,
-		Description: description,
-	})
+func (s *Span) SetStatus(code codes.Code, description string) {
+	s.span.SetStatus(code, description)
 }
 
 // SetAttributes sets attributes on the span

@@ -2,14 +2,12 @@ package distributed
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/linkflow-go/internal/domain/workflow"
 	"github.com/linkflow-go/pkg/events"
 	"github.com/linkflow-go/pkg/logger"
 	"github.com/redis/go-redis/v9"

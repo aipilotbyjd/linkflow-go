@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/linkflow-go/internal/domain/workflow"
 	"github.com/linkflow-go/internal/services/execution/orchestrator"
 	"github.com/linkflow-go/internal/services/execution/persistence"
 	"github.com/linkflow-go/pkg/events"
@@ -504,7 +503,7 @@ func (m *Manager) subscribeToEvents(ctx context.Context) error {
 
 // handleExecutionFailed handles execution failure events
 func (m *Manager) handleExecutionFailed(ctx context.Context, event events.Event) error {
-	executionID, _ := event.AggregateID.(string)
+	executionID := event.AggregateID
 	
 	m.logger.Info("Handling execution failure",
 		"executionId", executionID,

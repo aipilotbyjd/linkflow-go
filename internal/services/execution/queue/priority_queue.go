@@ -40,16 +40,17 @@ func NewPriorityQueue(priority workflow.ExecutionPriority) *PriorityQueue {
 	return pq
 }
 
-// Push adds an item to the queue
-func (pq *PriorityQueue) Push(item *QueueItem) {
+// Enqueue adds an item to the queue
+func (pq *PriorityQueue) Enqueue(item *QueueItem) {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
 	
-	heap.Push(pq, item)
+	pq.heapPush(item)
+	heap.Fix(pq, len(pq.items)-1)
 }
 
-// Pop removes and returns the highest priority item
-func (pq *PriorityQueue) Pop() *QueueItem {
+// Dequeue removes and returns the highest priority item
+func (pq *PriorityQueue) Dequeue() *QueueItem {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
 	
@@ -57,8 +58,7 @@ func (pq *PriorityQueue) Pop() *QueueItem {
 		return nil
 	}
 	
-	item := heap.Pop(pq).(*QueueItem)
-	return item
+	return pq.heapPop().(*QueueItem)
 }
 
 // Peek returns the highest priority item without removing it
@@ -136,16 +136,16 @@ func (pq *PriorityQueue) Swap(i, j int) {
 	pq.items[j].index = j
 }
 
-// heap.Interface Push - DO NOT call directly, use Push method instead
-func (pq *PriorityQueue) push(x interface{}) {
+// Push implements heap.Interface - called by heap.Push/heap.Fix
+func (pq *PriorityQueue) Push(x any) {
 	n := len(pq.items)
 	item := x.(*QueueItem)
 	item.index = n
 	pq.items = append(pq.items, item)
 }
 
-// heap.Interface Pop - DO NOT call directly, use Pop method instead  
-func (pq *PriorityQueue) pop() interface{} {
+// Pop implements heap.Interface - called by heap.Pop
+func (pq *PriorityQueue) Pop() any {
 	old := pq.items
 	n := len(old)
 	item := old[n-1]
@@ -155,13 +155,14 @@ func (pq *PriorityQueue) pop() interface{} {
 	return item
 }
 
-// For heap.Interface compatibility (lowercase methods used by heap package)
-func (pq *PriorityQueue) Push(x interface{}) {
-	pq.push(x)
+// heapPush is a helper for internal use
+func (pq *PriorityQueue) heapPush(x any) {
+	pq.Push(x)
 }
 
-func (pq *PriorityQueue) Pop() interface{} {
-	return pq.pop()
+// heapPop is a helper for internal use
+func (pq *PriorityQueue) heapPop() any {
+	return pq.Pop()
 }
 
 // DeadLetterQueue handles failed execution requests

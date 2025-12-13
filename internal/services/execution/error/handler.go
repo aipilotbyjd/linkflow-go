@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
-	"github.com/linkflow-go/internal/domain/workflow"
 	"github.com/linkflow-go/internal/services/execution/retry"
 	"github.com/linkflow-go/pkg/events"
 	"github.com/linkflow-go/pkg/logger"
@@ -291,7 +291,7 @@ func (h *Handler) handleExecutionFailed(ctx context.Context, event events.Event)
 	err := ExecutionError{
 		ExecutionID: executionID,
 		Message:     errMsg,
-		Cause:       fmt.Errorf(errMsg),
+		Cause:       fmt.Errorf("%s", errMsg),
 	}
 	
 	return h.HandleError(ctx, err)

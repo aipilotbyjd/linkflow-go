@@ -279,7 +279,7 @@ func (a *Archiver) archiveBatch(ctx context.Context, executions []workflow.Workf
 			CreatedAt:        time.Now(),
 		}
 		
-		if err := a.db.Create(metadata).Error; err != nil {
+		if err := a.db.WithContext(ctx).Create(metadata).Error; err != nil {
 			return fmt.Errorf("failed to save archive metadata: %w", err)
 		}
 	}
@@ -375,7 +375,7 @@ func (a *Archiver) CleanupOldArchives(ctx context.Context) error {
 		}
 		
 		// Delete metadata
-		if err := a.db.Delete(&archive).Error; err != nil {
+		if err := a.db.WithContext(ctx).Delete(&archive).Error; err != nil {
 			// Log error but continue
 			_ = err
 		}

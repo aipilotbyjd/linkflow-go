@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/linkflow-go/internal/domain/workflow"
 	"github.com/linkflow-go/pkg/events"
 	"github.com/linkflow-go/pkg/logger"
 	"github.com/sony/gobreaker"
@@ -438,4 +438,86 @@ func (s *RandomJitterStrategy) MaxAttempts() int {
 
 func (s *RandomJitterStrategy) Name() string {
 	return "random"
+}
+
+// DefaultErrorClassifier is the default implementation of ErrorClassifier
+type DefaultErrorClassifier struct {
+	retryableErrorPatterns []string
+}
+
+// NewDefaultErrorClassifier creates a new default error classifier
+func NewDefaultErrorClassifier() *DefaultErrorClassifier {
+	return &DefaultErrorClassifier{
+		retryableErrorPatterns: []string{
+			"timeout",
+			"connection refused",
+			"connection reset",
+			"temporary failure",
+			"rate limit",
+			"429",
+			"503",
+			"504",
+			"network",
+			"EOF",
+		},
+	}
+}
+
+// IsRetryable determines if an error is retryable
+func (c *DefaultErrorClassifier) IsRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	
+	errStr := strings.ToLower(err.Error())
+	for _, pattern := range c.retryableErrorPatterns {
+		if strings.Contains(errStr, strings.ToLower(pattern)) {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// GetErrorType classifies the error type
+func (c *DefaultErrorClassifier) GetErrorType(err error) ErrorType {
+	if err == nil {
+		return ErrorTypeUnknown
+	}
+	
+	errStr := strings.ToLower(err.Error())
+	
+	if strings.Contains(errStr, "timeout") {
+		return ErrorTypeTimeout
+	}
+	if strings.Contains(errStr, "rate limit") || strings.Contains(errStr, "429") {
+		return ErrorTypeRateLimit
+	}
+	if strings.Contains(errStr, "connection") || strings.Contains(errStr, "network") {
+		return ErrorTypeNetworkError
+	}
+	if strings.Contains(errStr, "503") || strings.Contains(errStr, "504") {
+		return ErrorTypeServiceError
+	}
+	if strings.Contains(errStr, "temporary") {
+		return ErrorTypeTransient
+	}
+	
+	return ErrorTypePermanent
+}
+
+// GetRetryStrategy returns the appropriate retry strategy for an error
+func (c *DefaultErrorClassifier) GetRetryStrategy(err error) Strategy {
+	errorType := c.GetErrorType(err)
+	
+	switch errorType {
+	case ErrorTypeRateLimit:
+		return NewExponentialBackoffStrategy(5, 5*time.Second, 60*time.Second, 2.0)
+	case ErrorTypeTimeout, ErrorTypeNetworkError:
+		return NewExponentialBackoffStrategy(3, 1*time.Second, 30*time.Second, 2.0)
+	case ErrorTypeServiceError:
+		return NewFixedDelayStrategy(3, 10*time.Second)
+	default:
+		return NewExponentialBackoffStrategy(3, 1*time.Second, 30*time.Second, 2.0)
+	}
 }

@@ -151,8 +151,8 @@ func (t *UsageTracker) StopTracking(executionID string) (*ResourceUsage, error) 
 	}
 	
 	// Get final resource snapshot
-	finalCPU, _ := t.cpuMonitor.GetCPUUsage()
-	finalMemory, _ := t.memoryMonitor.GetMemoryUsage()
+	_, _ = t.cpuMonitor.GetCPUUsage()
+	_, _ = t.memoryMonitor.GetMemoryUsage()
 	finalNetwork, _ := t.networkMonitor.GetNetworkStats()
 	
 	// Calculate total usage
@@ -162,7 +162,7 @@ func (t *UsageTracker) StopTracking(executionID string) (*ResourceUsage, error) 
 		ExecutionID:     executionID,
 		ComputeTime:     duration,
 		MemoryBytes:     int64(session.MemoryByteSeconds / duration.Seconds()),
-		NetworkBytes:    finalNetwork - int64(session.InitialNetwork),
+		NetworkBytes:    int64(finalNetwork) - int64(session.InitialNetwork),
 		StorageBytes:    session.StorageBytes,
 		APICallCount:    session.APICallCount,
 		DatabaseQueries: session.DatabaseQueries,

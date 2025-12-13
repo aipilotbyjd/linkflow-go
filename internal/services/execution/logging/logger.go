@@ -280,7 +280,7 @@ func (el *ExecutionLogger) persistLog(ctx context.Context, log *ExecutionLog) er
 	el.redis.Expire(ctx, key, 7*24*time.Hour)
 	
 	// Trim list to max size
-	el.redis.LTrim(ctx, key, -el.maxLogsPerExecution, -1)
+	el.redis.LTrim(ctx, key, int64(-el.maxLogsPerExecution), -1)
 	
 	return nil
 }
@@ -499,7 +499,7 @@ func (el *ExecutionLogger) handleNodeExecutionStarted(ctx context.Context, event
 }
 
 func (el *ExecutionLogger) handleNodeExecutionCompleted(ctx context.Context, event events.Event) error {
-	executionID, _ := event.AggregateID.(string)
+	executionID := event.AggregateID
 	nodeID, _ := event.Payload["nodeId"].(string)
 	status, _ := event.Payload["status"].(string)
 	
