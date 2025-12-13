@@ -58,11 +58,11 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	// Initialize repository
 	webhookRepo := repository.NewWebhookRepository(db)
 
+	// Initialize service
+	webhookService := service.NewWebhookService(webhookRepo, eventBus, redisClient, log)
+
 	// Initialize webhook router
 	webhookRouter := router.NewWebhookRouter(redisClient, log)
-
-	// Initialize service
-	webhookService := service.NewWebhookService(webhookRepo, webhookRouter, eventBus, redisClient, log)
 
 	// Initialize handlers
 	webhookHandlers := handlers.NewWebhookHandlers(webhookService, log)

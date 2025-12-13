@@ -55,8 +55,10 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	}
 
 	// Initialize Stripe client
-	// TODO: Add Stripe config to config.Config
-	stripeClient := stripe.NewClient("")
+	// TODO: Get Stripe keys from config
+	stripeSecretKey := "sk_test_placeholder"
+	stripeWebhookSecret := "whsec_placeholder"
+	stripeClient := stripe.NewClient(stripeSecretKey, stripeWebhookSecret)
 
 	// Initialize repository
 	billingRepo := repository.NewBillingRepository(db)
