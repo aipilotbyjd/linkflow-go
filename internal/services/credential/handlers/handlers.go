@@ -2,8 +2,9 @@ package handlers
 
 import (
 	"net/http"
-	
+
 	"github.com/gin-gonic/gin"
+	"github.com/linkflow-go/internal/domain/credential"
 	"github.com/linkflow-go/internal/services/credential/service"
 	"github.com/linkflow-go/pkg/logger"
 )
@@ -29,28 +30,121 @@ func (h *CredentialHandlers) Ready(c *gin.Context) {
 }
 
 func (h *CredentialHandlers) ListCredentials(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"credentials": []interface{}{}})
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user ID required"})
+		return
+	}
+
+	credentials, err := h.service.ListCredentials(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.Error("Failed to list credentials", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list credentials"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"credentials": credentials})
 }
 
 func (h *CredentialHandlers) GetCredential(c *gin.Context) {
 	id := c.Param("id")
-	c.JSON(http.StatusOK, gin.H{"id": id, "credential": "Credential details"})
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user ID required"})
+		return
+	}
+
+	cred, err := h.service.GetCredential(c.Request.Context(), id, userID)
+	if err != nil {
+		h.logger.Error("Failed to get credential", "error", err, "id", id)
+		c.JSON(http.StatusNotFound, gin.H{"error": "credential not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, cred)
 }
 
 func (h *CredentialHandlers) CreateCredential(c *gin.Context) {
-	c.JSON(http.StatusCreated, gin.H{"message": "Credential created"})
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user ID required"})
+		return
+	}
+
+	var req service.CreateCredentialRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	req.UserID = userID
+
+	cred, err := h.service.CreateCredential(c.Request.Context(), req)
+	if err != nil {
+		h.logger.Error("Failed to create credential", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, cred)
 }
 
 func (h *CredentialHandlers) UpdateCredential(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Credential updated"})
+	id := c.Param("id")
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user ID required"})
+		return
+	}
+
+	var req service.UpdateCredentialRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	req.UserID = userID
+
+	cred, err := h.service.UpdateCredential(c.Request.Context(), id, req)
+	if err != nil {
+		h.logger.Error("Failed to update credential", "error", err, "id", id)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, cred)
 }
 
 func (h *CredentialHandlers) DeleteCredential(c *gin.Context) {
+	id := c.Param("id")
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user ID required"})
+		return
+	}
+
+	if err := h.service.DeleteCredential(c.Request.Context(), id, userID); err != nil {
+		h.logger.Error("Failed to delete credential", "error", err, "id", id)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.Status(http.StatusNoContent)
 }
 
 func (h *CredentialHandlers) TestCredential(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"valid": true})
+	id := c.Param("id")
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user ID required"})
+		return
+	}
+
+	valid, err := h.service.TestCredential(c.Request.Context(), id, userID)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"valid": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"valid": valid})
 }
 
 func (h *CredentialHandlers) RotateCredential(c *gin.Context) {
@@ -58,10 +152,45 @@ func (h *CredentialHandlers) RotateCredential(c *gin.Context) {
 }
 
 func (h *CredentialHandlers) DecryptCredential(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"data": map[string]interface{}{}})
+	id := c.Param("id")
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user ID required"})
+		return
+	}
+
+	cred, err := h.service.GetDecryptedCredential(c.Request.Context(), id, userID)
+	if err != nil {
+		h.logger.Error("Failed to decrypt credential", "error", err, "id", id)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": cred.Data})
 }
 
 func (h *CredentialHandlers) ShareCredential(c *gin.Context) {
+	id := c.Param("id")
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user ID required"})
+		return
+	}
+
+	var req struct {
+		TargetUserID string `json:"targetUserId" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.service.ShareCredential(c.Request.Context(), id, userID, req.TargetUserID); err != nil {
+		h.logger.Error("Failed to share credential", "error", err, "id", id)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "Credential shared"})
 }
 
@@ -70,7 +199,8 @@ func (h *CredentialHandlers) UnshareCredential(c *gin.Context) {
 }
 
 func (h *CredentialHandlers) ListCredentialTypes(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"types": []string{"api_key", "oauth2", "basic", "ssh", "certificate"}})
+	types := credential.GetCredentialTypes()
+	c.JSON(http.StatusOK, gin.H{"types": types})
 }
 
 func (h *CredentialHandlers) GetCredentialTypeSchema(c *gin.Context) {

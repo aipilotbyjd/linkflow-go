@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/linkflow-go/internal/services/executor/worker"
+	"github.com/linkflow-go/internal/services/executor/server"
 	"github.com/linkflow-go/pkg/config"
 	"github.com/linkflow-go/pkg/logger"
 )
@@ -22,17 +22,19 @@ func main() {
 	// Initialize logger
 	log := logger.New(cfg.Logger.ToLoggerConfig())
 
-	// Create worker pool
-	pool, err := worker.NewPool(cfg, log)
+	// Create and start server
+	srv, err := server.New(cfg, log)
 	if err != nil {
-		log.Fatal("Failed to create worker pool", "error", err)
+		log.Fatal("Failed to create server", "error", err)
 	}
 
-	// Start workers
-	log.Info("Starting executor workers", "workers", pool.Size())
-	if err := pool.Start(); err != nil {
-		log.Fatal("Failed to start worker pool", "error", err)
-	}
+	// Start server in goroutine
+	go func() {
+		log.Info("Starting executor service", "port", cfg.Server.Port)
+		if err := srv.Start(); err != nil {
+			log.Fatal("Failed to start server", "error", err)
+		}
+	}()
 
 	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
@@ -45,8 +47,8 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := pool.Shutdown(ctx); err != nil {
-		log.Error("Worker pool forced to shutdown", "error", err)
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Error("Server forced to shutdown", "error", err)
 	}
 
 	log.Info("Executor service exited")
