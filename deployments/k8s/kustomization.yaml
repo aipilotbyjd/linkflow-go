@@ -1,0 +1,37 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: linkflow
+
+resources:
+  # Core Setup
+  - namespace.yaml
+  - secrets.yaml
+  - configmap.yaml
+  - ingress.yaml
+  
+  # All Services (16 total)
+  - services/auth.yaml
+  - services/user.yaml
+  - services/workflow.yaml
+  - services/execution.yaml
+  - services/executor.yaml
+  - services/node.yaml
+  - services/credential.yaml
+  - services/variable.yaml
+  - services/webhook.yaml
+  - services/schedule.yaml
+  - services/notification.yaml
+  - services/audit.yaml
+  - services/analytics.yaml
+  - services/search.yaml
+  - services/storage.yaml
+  - services/billing.yaml
+  
+  # Monitoring
+  - monitoring/prometheus-deployment.yaml
+  - monitoring/grafana-deployment.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: linkflow
+  app.kubernetes.io/managed-by: kustomize

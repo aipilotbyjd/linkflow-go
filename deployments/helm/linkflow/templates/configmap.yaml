@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: linkflow-config
+  labels:
+    app.kubernetes.io/part-of: linkflow
+data:
+  DATABASE_HOST: {{ .Values.postgresql.host | default "postgres-service" | quote }}
+  DATABASE_PORT: {{ .Values.postgresql.port | default "5432" | quote }}
+  DATABASE_NAME: {{ .Values.postgresql.auth.database | default "linkflow" | quote }}
+  DATABASE_SSL_MODE: "require"
+  
+  REDIS_HOST: {{ .Values.redis.host | default "redis-service" | quote }}
+  REDIS_PORT: {{ .Values.redis.port | default "6379" | quote }}
+  
+  KAFKA_BROKERS: {{ .Values.kafka.brokers | default "kafka-service:9092" | quote }}
+  
+  LOG_LEVEL: {{ .Values.common.logLevel | default "info" | quote }}
+  APP_ENV: {{ .Values.common.env | default "production" | quote }}

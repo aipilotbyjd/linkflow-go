@@ -1,0 +1,89 @@
+{{- range $name, $config := .Values.services }}
+{{- if $config.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}-service
+  labels:
+    app: {{ $name }}-service
+    app.kubernetes.io/part-of: linkflow
+spec:
+  replicas: {{ $config.replicaCount | default 2 }}
+  selector:
+    matchLabels:
+      app: {{ $name }}-service
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}-service
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+      - name: {{ $name }}-service
+        image: "{{ $.Values.common.image.registry }}/{{ $name }}-service:{{ $config.image.tag | default $.Values.common.image.tag }}"
+        imagePullPolicy: {{ $.Values.common.image.pullPolicy }}
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: linkflow-config
+        - secretRef:
+            name: linkflow-secrets
+        resources:
+          {{- toYaml $config.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-service
+  labels:
+    app: {{ $name }}-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ $config.service.port | default 8080 }}
+    targetPort: 8080
+    name: http
+  selector:
+    app: {{ $name }}-service
+{{- if $config.autoscaling }}
+{{- if $config.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}-service-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}-service
+  minReplicas: {{ $config.autoscaling.minReplicas | default $config.replicaCount }}
+  maxReplicas: {{ $config.autoscaling.maxReplicas | default 10 }}
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ $config.autoscaling.targetCPUUtilizationPercentage | default 70 }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
