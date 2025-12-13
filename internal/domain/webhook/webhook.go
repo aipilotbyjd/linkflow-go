@@ -11,11 +11,11 @@ import (
 )
 
 var (
-	ErrWebhookNotFound    = errors.New("webhook not found")
-	ErrWebhookDisabled    = errors.New("webhook is disabled")
-	ErrInvalidSignature   = errors.New("invalid webhook signature")
-	ErrWebhookExpired     = errors.New("webhook has expired")
-	ErrRateLimitExceeded  = errors.New("rate limit exceeded")
+	ErrWebhookNotFound   = errors.New("webhook not found")
+	ErrWebhookDisabled   = errors.New("webhook is disabled")
+	ErrInvalidSignature  = errors.New("invalid webhook signature")
+	ErrWebhookExpired    = errors.New("webhook has expired")
+	ErrRateLimitExceeded = errors.New("rate limit exceeded")
 )
 
 // Webhook represents a registered webhook endpoint
@@ -33,7 +33,7 @@ type Webhook struct {
 	AuthType     string            `json:"authType"` // none, header, basic, bearer
 	AuthConfig   map[string]string `json:"authConfig" gorm:"serializer:json"`
 	Headers      map[string]string `json:"headers" gorm:"serializer:json"` // Required headers
-	RateLimit    int               `json:"rateLimit" gorm:"default:100"` // requests per minute
+	RateLimit    int               `json:"rateLimit" gorm:"default:100"`   // requests per minute
 	ExpiresAt    *time.Time        `json:"expiresAt"`
 	LastCalledAt *time.Time        `json:"lastCalledAt"`
 	CallCount    int64             `json:"callCount" gorm:"default:0"`
@@ -41,28 +41,38 @@ type Webhook struct {
 	UpdatedAt    time.Time         `json:"updatedAt"`
 }
 
+// TableName specifies the table name for GORM
+func (Webhook) TableName() string {
+	return "workflow.webhooks"
+}
+
 // WebhookExecution records each webhook call
 type WebhookExecution struct {
-	ID            string                 `json:"id" gorm:"primaryKey"`
-	WebhookID     string                 `json:"webhookId" gorm:"not null;index"`
-	WorkflowID    string                 `json:"workflowId" gorm:"not null;index"`
-	ExecutionID   string                 `json:"executionId"`
-	Method        string                 `json:"method"`
-	Path          string                 `json:"path"`
-	Headers       map[string]string      `json:"headers" gorm:"serializer:json"`
-	QueryParams   map[string]string      `json:"queryParams" gorm:"serializer:json"`
-	Body          string                 `json:"body"`
-	ContentType   string                 `json:"contentType"`
-	IPAddress     string                 `json:"ipAddress"`
-	UserAgent     string                 `json:"userAgent"`
-	Status        string                 `json:"status"` // received, processed, failed
-	ResponseCode  int                    `json:"responseCode"`
-	ResponseBody  string                 `json:"responseBody"`
-	Error         string                 `json:"error"`
-	ProcessedAt   *time.Time             `json:"processedAt"`
-	Duration      int64                  `json:"duration"` // in ms
-	Metadata      map[string]interface{} `json:"metadata" gorm:"serializer:json"`
-	CreatedAt     time.Time              `json:"createdAt"`
+	ID           string                 `json:"id" gorm:"primaryKey"`
+	WebhookID    string                 `json:"webhookId" gorm:"not null;index"`
+	WorkflowID   string                 `json:"workflowId" gorm:"not null;index"`
+	ExecutionID  string                 `json:"executionId"`
+	Method       string                 `json:"method"`
+	Path         string                 `json:"path"`
+	Headers      map[string]string      `json:"headers" gorm:"serializer:json"`
+	QueryParams  map[string]string      `json:"queryParams" gorm:"serializer:json"`
+	Body         string                 `json:"body"`
+	ContentType  string                 `json:"contentType"`
+	IPAddress    string                 `json:"ipAddress"`
+	UserAgent    string                 `json:"userAgent"`
+	Status       string                 `json:"status"` // received, processed, failed
+	ResponseCode int                    `json:"responseCode"`
+	ResponseBody string                 `json:"responseBody"`
+	Error        string                 `json:"error"`
+	ProcessedAt  *time.Time             `json:"processedAt"`
+	Duration     int64                  `json:"duration"` // in ms
+	Metadata     map[string]interface{} `json:"metadata" gorm:"serializer:json"`
+	CreatedAt    time.Time              `json:"createdAt"`
+}
+
+// TableName specifies the table name for GORM
+func (WebhookExecution) TableName() string {
+	return "workflow.webhook_logs"
 }
 
 // NewWebhook creates a new webhook

@@ -24,6 +24,11 @@ type Credential struct {
 	UpdatedAt   time.Time              `json:"updatedAt"`
 }
 
+// TableName specifies the table name for GORM
+func (Credential) TableName() string {
+	return "workflow.credentials"
+}
+
 type CredentialType struct {
 	Type        string        `json:"type"`
 	Name        string        `json:"name"`
@@ -103,7 +108,7 @@ func (c *Credential) Validate() error {
 	if c.UserID == "" {
 		return errors.New("user ID is required")
 	}
-	
+
 	// Validate based on type
 	switch c.Type {
 	case TypeAPIKey:
@@ -117,7 +122,7 @@ func (c *Credential) Validate() error {
 	case TypeDatabase:
 		return c.validateDatabase()
 	}
-	
+
 	return nil
 }
 
@@ -160,7 +165,7 @@ func (c *Credential) validateDatabase() error {
 	if _, ok := c.Data["connectionString"]; ok {
 		return nil
 	}
-	
+
 	if _, ok := c.Data["host"]; !ok {
 		return errors.New("host is required")
 	}
@@ -173,7 +178,7 @@ func (c *Credential) validateDatabase() error {
 	if _, ok := c.Data["password"]; !ok {
 		return errors.New("password is required")
 	}
-	
+
 	return nil
 }
 
@@ -225,12 +230,12 @@ func GetCredentialTypes() []CredentialType {
 			Icon:        "shield",
 			Fields: []FieldConfig{
 				{
-					Name:        "authFlow",
-					Type:        "select",
-					Label:       "Auth Flow",
-					Required:    true,
-					Default:     AuthFlowClientCredentials,
-					Options:     []string{AuthFlowClientCredentials, AuthFlowAuthorizationCode, AuthFlowPassword},
+					Name:     "authFlow",
+					Type:     "select",
+					Label:    "Auth Flow",
+					Required: true,
+					Default:  AuthFlowClientCredentials,
+					Options:  []string{AuthFlowClientCredentials, AuthFlowAuthorizationCode, AuthFlowPassword},
 				},
 				{
 					Name:        "clientId",
@@ -300,11 +305,11 @@ func GetCredentialTypes() []CredentialType {
 			Icon:        "database",
 			Fields: []FieldConfig{
 				{
-					Name:        "type",
-					Type:        "select",
-					Label:       "Database Type",
-					Required:    true,
-					Options:     []string{"postgres", "mysql", "mongodb", "redis", "mssql"},
+					Name:     "type",
+					Type:     "select",
+					Label:    "Database Type",
+					Required: true,
+					Options:  []string{"postgres", "mysql", "mongodb", "redis", "mssql"},
 				},
 				{
 					Name:        "connectionString",
@@ -323,11 +328,11 @@ func GetCredentialTypes() []CredentialType {
 					Placeholder: "localhost",
 				},
 				{
-					Name:        "port",
-					Type:        "number",
-					Label:       "Port",
-					Required:    false,
-					Default:     5432,
+					Name:     "port",
+					Type:     "number",
+					Label:    "Port",
+					Required: false,
+					Default:  5432,
 				},
 				{
 					Name:        "database",
@@ -352,11 +357,11 @@ func GetCredentialTypes() []CredentialType {
 					Placeholder: "Enter password",
 				},
 				{
-					Name:        "ssl",
-					Type:        "boolean",
-					Label:       "Use SSL",
-					Required:    false,
-					Default:     false,
+					Name:     "ssl",
+					Type:     "boolean",
+					Label:    "Use SSL",
+					Required: false,
+					Default:  false,
 				},
 			},
 		},

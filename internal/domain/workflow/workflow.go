@@ -26,6 +26,11 @@ type Workflow struct {
 	DeletedAt   *time.Time   `json:"deletedAt,omitempty" gorm:"index"`
 }
 
+// TableName specifies the table name for GORM
+func (Workflow) TableName() string {
+	return "workflow.workflows"
+}
+
 type Node struct {
 	ID         string                 `json:"id"`
 	Name       string                 `json:"name"`
@@ -38,11 +43,11 @@ type Node struct {
 }
 
 type Connection struct {
-	ID         string `json:"id"`
-	Source     string `json:"source"`
-	Target     string `json:"target"`
-	SourcePort string `json:"sourcePort"`
-	TargetPort string `json:"targetPort"`
+	ID         string                 `json:"id"`
+	Source     string                 `json:"source"`
+	Target     string                 `json:"target"`
+	SourcePort string                 `json:"sourcePort"`
+	TargetPort string                 `json:"targetPort"`
 	Data       map[string]interface{} `json:"data"`
 }
 
@@ -52,12 +57,12 @@ type Position struct {
 }
 
 type Settings struct {
-	ErrorHandling   ErrorHandling   `json:"errorHandling"`
-	Timeout         int             `json:"timeout"`
-	RetryOnFailure  bool            `json:"retryOnFailure"`
-	MaxRetries      int             `json:"maxRetries"`
-	SaveDataOnError bool            `json:"saveDataOnError"`
-	Timezone        string          `json:"timezone"`
+	ErrorHandling   ErrorHandling `json:"errorHandling"`
+	Timeout         int           `json:"timeout"`
+	RetryOnFailure  bool          `json:"retryOnFailure"`
+	MaxRetries      int           `json:"maxRetries"`
+	SaveDataOnError bool          `json:"saveDataOnError"`
+	Timezone        string        `json:"timezone"`
 }
 
 type ErrorHandling struct {
@@ -93,16 +98,16 @@ type WorkflowExecution struct {
 }
 
 type NodeExecution struct {
-	ID           string                 `json:"id" gorm:"primaryKey"`
-	ExecutionID  string                 `json:"executionId" gorm:"not null;index"`
-	NodeID       string                 `json:"nodeId" gorm:"not null"`
-	Status       string                 `json:"status"`
-	StartedAt    time.Time              `json:"startedAt"`
-	FinishedAt   *time.Time             `json:"finishedAt"`
-	InputData    map[string]interface{} `json:"inputData" gorm:"serializer:json"`
-	OutputData   map[string]interface{} `json:"outputData" gorm:"serializer:json"`
-	Error        string                 `json:"error"`
-	RetryCount   int                    `json:"retryCount"`
+	ID          string                 `json:"id" gorm:"primaryKey"`
+	ExecutionID string                 `json:"executionId" gorm:"not null;index"`
+	NodeID      string                 `json:"nodeId" gorm:"not null"`
+	Status      string                 `json:"status"`
+	StartedAt   time.Time              `json:"startedAt"`
+	FinishedAt  *time.Time             `json:"finishedAt"`
+	InputData   map[string]interface{} `json:"inputData" gorm:"serializer:json"`
+	OutputData  map[string]interface{} `json:"outputData" gorm:"serializer:json"`
+	Error       string                 `json:"error"`
+	RetryCount  int                    `json:"retryCount"`
 }
 
 // Status constants
@@ -158,18 +163,18 @@ func (w *Workflow) Validate() error {
 	// Check if workflow has at least one trigger node
 	hasTrigger := false
 	nodeMap := make(map[string]Node)
-	
+
 	for _, node := range w.Nodes {
 		nodeMap[node.ID] = node
 		if node.Type == NodeTypeTrigger {
 			hasTrigger = true
 		}
 	}
-	
+
 	if !hasTrigger {
 		return errors.New("workflow must have at least one trigger node")
 	}
-	
+
 	// Validate connections
 	for _, conn := range w.Connections {
 		if _, ok := nodeMap[conn.Source]; !ok {
@@ -179,12 +184,12 @@ func (w *Workflow) Validate() error {
 			return errors.New("invalid connection: target node not found")
 		}
 	}
-	
+
 	// Check for cycles (simplified check)
 	if w.hasCycle() {
 		return errors.New("workflow contains a cycle")
 	}
-	
+
 	return nil
 }
 
@@ -195,17 +200,17 @@ func (w *Workflow) hasCycle() bool {
 	for _, conn := range w.Connections {
 		graph[conn.Source] = append(graph[conn.Source], conn.Target)
 	}
-	
+
 	// Track visited and in-progress nodes
 	visited := make(map[string]bool)
 	inProgress := make(map[string]bool)
-	
+
 	// DFS to detect cycle
 	var hasCycleDFS func(node string) bool
 	hasCycleDFS = func(node string) bool {
 		visited[node] = true
 		inProgress[node] = true
-		
+
 		for _, neighbor := range graph[node] {
 			if !visited[neighbor] {
 				if hasCycleDFS(neighbor) {
@@ -215,11 +220,11 @@ func (w *Workflow) hasCycle() bool {
 				return true
 			}
 		}
-		
+
 		inProgress[node] = false
 		return false
 	}
-	
+
 	// Check all nodes
 	for _, node := range w.Nodes {
 		if !visited[node.ID] {
@@ -228,7 +233,7 @@ func (w *Workflow) hasCycle() bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -237,7 +242,7 @@ func (w *Workflow) Activate() error {
 	if err := w.Validate(); err != nil {
 		return err
 	}
-	
+
 	w.Status = StatusActive
 	w.IsActive = true
 	w.UpdatedAt = time.Now()
@@ -269,10 +274,10 @@ func (w *Workflow) Clone(newName string) *Workflow {
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
-	
+
 	copy(clone.Nodes, w.Nodes)
 	copy(clone.Connections, w.Connections)
-	
+
 	return clone
 }
 
@@ -314,11 +319,11 @@ type CreateVersionRequest struct {
 }
 
 type CreateTemplateRequest struct {
-	CreatorID   string                 `json:"-"`
-	Name        string                 `json:"name" binding:"required"`
-	Description string                 `json:"description"`
-	Category    string                 `json:"category"`
-	Icon        string                 `json:"icon"`
-	Workflow    Workflow               `json:"workflow"`
-	Tags        []string               `json:"tags"`
+	CreatorID   string   `json:"-"`
+	Name        string   `json:"name" binding:"required"`
+	Description string   `json:"description"`
+	Category    string   `json:"category"`
+	Icon        string   `json:"icon"`
+	Workflow    Workflow `json:"workflow"`
+	Tags        []string `json:"tags"`
 }

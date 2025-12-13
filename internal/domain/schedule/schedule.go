@@ -28,6 +28,11 @@ type Schedule struct {
 	UpdatedAt      time.Time              `json:"updatedAt"`
 }
 
+// TableName specifies the table name for GORM
+func (Schedule) TableName() string {
+	return "schedule.schedules"
+}
+
 type ScheduleExecution struct {
 	ID          string                 `json:"id" gorm:"primaryKey"`
 	ScheduleID  string                 `json:"scheduleId" gorm:"not null;index"`
@@ -96,25 +101,25 @@ func (s *Schedule) Validate() error {
 	if s.CronExpression == "" {
 		return errors.New("cron expression is required")
 	}
-	
+
 	// Validate cron expression format
 	// This is a simplified validation - in production use a proper cron parser
 	if len(s.CronExpression) < 9 { // Minimum: "* * * * *"
 		return errors.New("invalid cron expression")
 	}
-	
+
 	// Validate timezone
 	if _, err := time.LoadLocation(s.Timezone); err != nil {
 		return errors.New("invalid timezone")
 	}
-	
+
 	// Validate date range
 	if s.StartDate != nil && s.EndDate != nil {
 		if s.StartDate.After(*s.EndDate) {
 			return errors.New("start date must be before end date")
 		}
 	}
-	
+
 	// Validate misfire policy
 	validPolicies := []string{MisfirePolicySkip, MisfirePolicyRunOnce, MisfirePolicyRunAll}
 	valid := false
@@ -127,7 +132,7 @@ func (s *Schedule) Validate() error {
 	if !valid {
 		return errors.New("invalid misfire policy")
 	}
-	
+
 	return nil
 }
 
@@ -144,15 +149,15 @@ func (s *Schedule) ShouldRun(t time.Time) bool {
 	if !s.IsActive {
 		return false
 	}
-	
+
 	if s.IsExpired() {
 		return false
 	}
-	
+
 	if s.StartDate != nil && t.Before(*s.StartDate) {
 		return false
 	}
-	
+
 	return true
 }
 
@@ -198,12 +203,12 @@ func ParseCronExpression(input string) (string, error) {
 	if expr, ok := PredefinedSchedules[input]; ok {
 		return expr, nil
 	}
-	
+
 	// Validate custom cron expression
 	// This is simplified - use a proper cron parser in production
 	if len(input) < 9 {
 		return "", errors.New("invalid cron expression")
 	}
-	
+
 	return input, nil
 }

@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/linkflow-go/pkg/database"
+	"github.com/linkflow-go/pkg/events"
+	"github.com/linkflow-go/pkg/logger"
 	"github.com/spf13/viper"
 )
 
@@ -51,26 +54,26 @@ type KafkaConfig struct {
 }
 
 type AuthConfig struct {
-	JWTSecret        string `mapstructure:"jwt_secret"`
-	JWTExpiry        int    `mapstructure:"jwt_expiry"`
-	RefreshExpiry    int    `mapstructure:"refresh_expiry"`
-	PrivateKeyPath   string `mapstructure:"private_key_path"`
-	PublicKeyPath    string `mapstructure:"public_key_path"`
-	JWT              JWTConfig `mapstructure:"jwt"`
+	JWTSecret      string    `mapstructure:"jwt_secret"`
+	JWTExpiry      int       `mapstructure:"jwt_expiry"`
+	RefreshExpiry  int       `mapstructure:"refresh_expiry"`
+	PrivateKeyPath string    `mapstructure:"private_key_path"`
+	PublicKeyPath  string    `mapstructure:"public_key_path"`
+	JWT            JWTConfig `mapstructure:"jwt"`
 }
 
 type JWTConfig struct {
-	SecretKey    string `mapstructure:"secret_key"`
-	ExpiryHours  int    `mapstructure:"expiry_hours"`
-	RefreshDays  int    `mapstructure:"refresh_days"`
-	Issuer       string `mapstructure:"issuer"`
-	Algorithm    string `mapstructure:"algorithm"` // HS256 for dev, RS256 for prod
+	SecretKey   string `mapstructure:"secret_key"`
+	ExpiryHours int    `mapstructure:"expiry_hours"`
+	RefreshDays int    `mapstructure:"refresh_days"`
+	Issuer      string `mapstructure:"issuer"`
+	Algorithm   string `mapstructure:"algorithm"` // HS256 for dev, RS256 for prod
 }
 
 type TelemetryConfig struct {
-	Enabled      bool   `mapstructure:"enabled"`
-	JaegerURL    string `mapstructure:"jaeger_url"`
-	ServiceName  string `mapstructure:"service_name"`
+	Enabled      bool    `mapstructure:"enabled"`
+	JaegerURL    string  `mapstructure:"jaeger_url"`
+	ServiceName  string  `mapstructure:"service_name"`
 	SamplingRate float64 `mapstructure:"sampling_rate"`
 }
 
@@ -87,15 +90,15 @@ func Load(serviceName string) (*Config, error) {
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath("./configs")
 	viper.AddConfigPath("/etc/linkflow")
-	
+
 	// Set defaults
 	setDefaults()
-	
+
 	// Enable environment variables
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.SetEnvPrefix("LINKFLOW")
-	
+
 	// Read config file
 	if err := viper.ReadInConfig(); err != nil {
 		// It's okay if config file doesn't exist, we'll use defaults and env vars
@@ -103,15 +106,15 @@ func Load(serviceName string) (*Config, error) {
 			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
 	}
-	
+
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-	
+
 	// Override with environment variables
 	overrideFromEnv(&config)
-	
+
 	return &config, nil
 }
 
@@ -122,7 +125,7 @@ func setDefaults() {
 	viper.SetDefault("server.read_timeout", 30)
 	viper.SetDefault("server.write_timeout", 30)
 	viper.SetDefault("server.shutdown_timeout", 30)
-	
+
 	// Database defaults
 	viper.SetDefault("database.host", "localhost")
 	viper.SetDefault("database.port", 5432)
@@ -132,31 +135,31 @@ func setDefaults() {
 	viper.SetDefault("database.ssl_mode", "disable")
 	viper.SetDefault("database.max_open_conns", 25)
 	viper.SetDefault("database.max_idle_conns", 25)
-	
+
 	// Redis defaults
 	viper.SetDefault("redis.host", "localhost")
 	viper.SetDefault("redis.port", 6379)
 	viper.SetDefault("redis.db", 0)
 	viper.SetDefault("redis.pool_size", 10)
-	
+
 	// Kafka defaults
 	viper.SetDefault("kafka.brokers", []string{"localhost:9092"})
 	viper.SetDefault("kafka.consumer_group", "linkflow-group")
-	
+
 	// Auth defaults
 	viper.SetDefault("auth.jwt_expiry", 900)        // 15 minutes
 	viper.SetDefault("auth.refresh_expiry", 604800) // 7 days
 	viper.SetDefault("auth.jwt.secret_key", "development-secret-key-change-in-production")
-	viper.SetDefault("auth.jwt.expiry_hours", 1)   // 1 hour for access token
-	viper.SetDefault("auth.jwt.refresh_days", 7)    // 7 days for refresh token
+	viper.SetDefault("auth.jwt.expiry_hours", 1) // 1 hour for access token
+	viper.SetDefault("auth.jwt.refresh_days", 7) // 7 days for refresh token
 	viper.SetDefault("auth.jwt.issuer", "linkflow-auth")
 	viper.SetDefault("auth.jwt.algorithm", "HS256") // HS256 for dev, RS256 for prod
-	
+
 	// Telemetry defaults
 	viper.SetDefault("telemetry.enabled", true)
 	viper.SetDefault("telemetry.jaeger_url", "http://localhost:14268/api/traces")
 	viper.SetDefault("telemetry.sampling_rate", 1.0)
-	
+
 	// Logger defaults
 	viper.SetDefault("logger.level", "info")
 	viper.SetDefault("logger.format", "json")
@@ -183,18 +186,18 @@ func overrideFromEnv(cfg *Config) {
 	if name := viper.GetString("DATABASE_NAME"); name != "" {
 		cfg.Database.Name = name
 	}
-	
+
 	if redisHost := viper.GetString("REDIS_HOST"); redisHost != "" {
 		cfg.Redis.Host = redisHost
 	}
 	if redisPort := viper.GetInt("REDIS_PORT"); redisPort != 0 {
 		cfg.Redis.Port = redisPort
 	}
-	
+
 	if brokers := viper.GetString("KAFKA_BROKERS"); brokers != "" {
 		cfg.Kafka.Brokers = strings.Split(brokers, ",")
 	}
-	
+
 	if servicePort := viper.GetInt("SERVER_PORT"); servicePort != 0 {
 		cfg.Server.Port = servicePort
 	}
@@ -207,4 +210,38 @@ func (c *DatabaseConfig) DSN() string {
 
 func (c *RedisConfig) Addr() string {
 	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+}
+
+// ToDatabaseConfig converts DatabaseConfig to database.Config
+func (c *DatabaseConfig) ToDatabaseConfig() database.Config {
+	return database.Config{
+		Host:         c.Host,
+		Port:         c.Port,
+		User:         c.User,
+		Password:     c.Password,
+		Name:         c.Name,
+		SSLMode:      c.SSLMode,
+		MaxOpenConns: c.MaxOpenConns,
+		MaxIdleConns: c.MaxIdleConns,
+	}
+}
+
+// ToKafkaConfig converts KafkaConfig to events.KafkaConfig
+func (c *KafkaConfig) ToKafkaConfig() events.KafkaConfig {
+	return events.KafkaConfig{
+		Brokers:       c.Brokers,
+		Topic:         c.Topic,
+		ConsumerGroup: c.ConsumerGroup,
+	}
+}
+
+// ToLoggerConfig converts LoggerConfig to logger.Config
+func (c *LoggerConfig) ToLoggerConfig() logger.Config {
+	return logger.Config{
+		Level:      c.Level,
+		Format:     c.Format,
+		Output:     c.Output,
+		AddCaller:  c.AddCaller,
+		Stacktrace: c.Stacktrace,
+	}
 }
