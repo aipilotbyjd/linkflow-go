@@ -42,18 +42,13 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     ports:
       - "29092:29092"
     networks:
       - linkflow-network
-    healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
@@ -113,9 +108,9 @@ services:
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
-      - "16686:16686"  # Jaeger UI
-      - "14268:14268"  # Collector
-      - "4317:4317"    # OTLP gRPC
+      - "16686:16686"
+      - "14268:14268"
+      - "4317:4317"
     networks:
       - linkflow-network
 
@@ -133,14 +128,22 @@ services:
       KONG_ADMIN_ERROR_LOG: /dev/stderr
       KONG_ADMIN_LISTEN: 0.0.0.0:8443
     ports:
-      - "8000:8000"  # Proxy
-      - "8443:8443"  # Admin API
+      - "8000:8000"
+      - "8443:8443"
     volumes:
       - ./configs/kong.yml:/kong/declarative/kong.yml
+    depends_on:
+      - auth-service
+      - user-service
+      - workflow-service
     networks:
       - linkflow-network
 
-  # Core Services
+  # ===========================================
+  # MICROSERVICES - Ports aligned with Kong
+  # ===========================================
+
+  # Port 8001 - Auth Service
   auth-service:
     build:
       context: .
@@ -148,20 +151,14 @@ services:
       args:
         SERVICE_NAME: auth
     environment:
-      LINKFLOW_DB_HOST: postgres
-      LINKFLOW_DB_PORT: 5432
-      LINKFLOW_DB_NAME: linkflow
-      LINKFLOW_DB_USER: linkflow
-      LINKFLOW_DB_PASSWORD: linkflow123
-      LINKFLOW_REDIS_HOST: redis
-      LINKFLOW_REDIS_PORT: 6379
-      LINKFLOW_KAFKA_BROKERS: kafka:29092
-      LINKFLOW_SERVICE_PORT: 8001
       LINKFLOW_DATABASE_HOST: postgres
       LINKFLOW_DATABASE_PORT: 5432
       LINKFLOW_DATABASE_NAME: linkflow
       LINKFLOW_DATABASE_USER: linkflow
       LINKFLOW_DATABASE_PASSWORD: linkflow123
+      LINKFLOW_REDIS_HOST: redis
+      LINKFLOW_REDIS_PORT: 6379
+      LINKFLOW_KAFKA_BROKERS: kafka:29092
       LINKFLOW_SERVER_PORT: 8001
     ports:
       - "8001:8001"
@@ -172,6 +169,7 @@ services:
     networks:
       - linkflow-network
 
+  # Port 8002 - User Service
   user-service:
     build:
       context: .
@@ -179,20 +177,14 @@ services:
       args:
         SERVICE_NAME: user
     environment:
-      LINKFLOW_DB_HOST: postgres
-      LINKFLOW_DB_PORT: 5432
-      LINKFLOW_DB_NAME: linkflow
-      LINKFLOW_DB_USER: linkflow
-      LINKFLOW_DB_PASSWORD: linkflow123
-      LINKFLOW_REDIS_HOST: redis
-      LINKFLOW_REDIS_PORT: 6379
-      LINKFLOW_KAFKA_BROKERS: kafka:29092
-      LINKFLOW_SERVICE_PORT: 8002
       LINKFLOW_DATABASE_HOST: postgres
       LINKFLOW_DATABASE_PORT: 5432
       LINKFLOW_DATABASE_NAME: linkflow
       LINKFLOW_DATABASE_USER: linkflow
       LINKFLOW_DATABASE_PASSWORD: linkflow123
+      LINKFLOW_REDIS_HOST: redis
+      LINKFLOW_REDIS_PORT: 6379
+      LINKFLOW_KAFKA_BROKERS: kafka:29092
       LINKFLOW_SERVER_PORT: 8002
     ports:
       - "8002:8002"
@@ -203,6 +195,7 @@ services:
     networks:
       - linkflow-network
 
+  # Port 8003 - Workflow Service
   workflow-service:
     build:
       context: .
@@ -210,20 +203,14 @@ services:
       args:
         SERVICE_NAME: workflow
     environment:
-      LINKFLOW_DB_HOST: postgres
-      LINKFLOW_DB_PORT: 5432
-      LINKFLOW_DB_NAME: linkflow
-      LINKFLOW_DB_USER: linkflow
-      LINKFLOW_DB_PASSWORD: linkflow123
-      LINKFLOW_REDIS_HOST: redis
-      LINKFLOW_REDIS_PORT: 6379
-      LINKFLOW_KAFKA_BROKERS: kafka:29092
-      LINKFLOW_SERVICE_PORT: 8003
       LINKFLOW_DATABASE_HOST: postgres
       LINKFLOW_DATABASE_PORT: 5432
       LINKFLOW_DATABASE_NAME: linkflow
       LINKFLOW_DATABASE_USER: linkflow
       LINKFLOW_DATABASE_PASSWORD: linkflow123
+      LINKFLOW_REDIS_HOST: redis
+      LINKFLOW_REDIS_PORT: 6379
+      LINKFLOW_KAFKA_BROKERS: kafka:29092
       LINKFLOW_SERVER_PORT: 8003
     ports:
       - "8003:8003"
@@ -234,6 +221,7 @@ services:
     networks:
       - linkflow-network
 
+  # Port 8004 - Execution Service
   execution-service:
     build:
       context: .
@@ -241,20 +229,14 @@ services:
       args:
         SERVICE_NAME: execution
     environment:
-      LINKFLOW_DB_HOST: postgres
-      LINKFLOW_DB_PORT: 5432
-      LINKFLOW_DB_NAME: linkflow
-      LINKFLOW_DB_USER: linkflow
-      LINKFLOW_DB_PASSWORD: linkflow123
-      LINKFLOW_REDIS_HOST: redis
-      LINKFLOW_REDIS_PORT: 6379
-      LINKFLOW_KAFKA_BROKERS: kafka:29092
-      LINKFLOW_SERVICE_PORT: 8004
       LINKFLOW_DATABASE_HOST: postgres
       LINKFLOW_DATABASE_PORT: 5432
       LINKFLOW_DATABASE_NAME: linkflow
       LINKFLOW_DATABASE_USER: linkflow
       LINKFLOW_DATABASE_PASSWORD: linkflow123
+      LINKFLOW_REDIS_HOST: redis
+      LINKFLOW_REDIS_PORT: 6379
+      LINKFLOW_KAFKA_BROKERS: kafka:29092
       LINKFLOW_SERVER_PORT: 8004
     ports:
       - "8004:8004"
@@ -265,116 +247,7 @@ services:
     networks:
       - linkflow-network
 
-  # Additional Services
-  webhook-service:
-    build:
-      context: .
-      dockerfile: deployments/docker/Dockerfile
-      args:
-        SERVICE_NAME: webhook
-    environment:
-      LINKFLOW_DATABASE_HOST: postgres
-      LINKFLOW_DATABASE_PORT: 5432
-      LINKFLOW_DATABASE_NAME: linkflow
-      LINKFLOW_DATABASE_USER: linkflow
-      LINKFLOW_DATABASE_PASSWORD: linkflow123
-      LINKFLOW_REDIS_HOST: redis
-      LINKFLOW_REDIS_PORT: 6379
-      LINKFLOW_KAFKA_BROKERS: kafka:29092
-      LINKFLOW_SERVER_PORT: 8007
-    ports:
-      - "8007:8007"
-    depends_on:
-      - postgres
-      - redis
-      - kafka
-    networks:
-      - linkflow-network
-
-  schedule-service:
-    build:
-      context: .
-      dockerfile: deployments/docker/Dockerfile
-      args:
-        SERVICE_NAME: schedule
-    environment:
-      LINKFLOW_DATABASE_HOST: postgres
-      LINKFLOW_DATABASE_PORT: 5432
-      LINKFLOW_DATABASE_NAME: linkflow
-      LINKFLOW_DATABASE_USER: linkflow
-      LINKFLOW_DATABASE_PASSWORD: linkflow123
-      LINKFLOW_REDIS_HOST: redis
-      LINKFLOW_REDIS_PORT: 6379
-      LINKFLOW_KAFKA_BROKERS: kafka:29092
-      LINKFLOW_SERVER_PORT: 8008
-    ports:
-      - "8008:8008"
-    depends_on:
-      - postgres
-      - redis
-      - kafka
-    networks:
-      - linkflow-network
-
-  websocket-service:
-    build:
-      context: .
-      dockerfile: deployments/docker/Dockerfile
-      args:
-        SERVICE_NAME: websocket
-    environment:
-      LINKFLOW_KAFKA_BROKERS: kafka:29092
-      LINKFLOW_SERVER_PORT: 8020
-    ports:
-      - "8020:8020"
-    depends_on:
-      - kafka
-    networks:
-      - linkflow-network
-
-  variable-service:
-    build:
-      context: .
-      dockerfile: deployments/docker/Dockerfile
-      args:
-        SERVICE_NAME: variable
-    environment:
-      LINKFLOW_DATABASE_HOST: postgres
-      LINKFLOW_DATABASE_PORT: 5432
-      LINKFLOW_DATABASE_NAME: linkflow
-      LINKFLOW_DATABASE_USER: linkflow
-      LINKFLOW_DATABASE_PASSWORD: linkflow123
-      LINKFLOW_SERVER_PORT: 8009
-    ports:
-      - "8009:8009"
-    depends_on:
-      - postgres
-    networks:
-      - linkflow-network
-
-  credential-service:
-    build:
-      context: .
-      dockerfile: deployments/docker/Dockerfile
-      args:
-        SERVICE_NAME: credential
-    environment:
-      LINKFLOW_DATABASE_HOST: postgres
-      LINKFLOW_DATABASE_PORT: 5432
-      LINKFLOW_DATABASE_NAME: linkflow
-      LINKFLOW_DATABASE_USER: linkflow
-      LINKFLOW_DATABASE_PASSWORD: linkflow123
-      LINKFLOW_REDIS_HOST: redis
-      LINKFLOW_REDIS_PORT: 6379
-      LINKFLOW_SERVER_PORT: 8010
-    ports:
-      - "8010:8010"
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - linkflow-network
-
+  # Port 8005 - Node Service
   node-service:
     build:
       context: .
@@ -390,9 +263,9 @@ services:
       LINKFLOW_REDIS_HOST: redis
       LINKFLOW_REDIS_PORT: 6379
       LINKFLOW_KAFKA_BROKERS: kafka:29092
-      LINKFLOW_SERVER_PORT: 8011
+      LINKFLOW_SERVER_PORT: 8005
     ports:
-      - "8011:8011"
+      - "8005:8005"
     depends_on:
       - postgres
       - redis
@@ -400,12 +273,159 @@ services:
     networks:
       - linkflow-network
 
-  executor-service:
+  # Port 8006 - Webhook Service
+  webhook-service:
     build:
       context: .
       dockerfile: deployments/docker/Dockerfile
       args:
-        SERVICE_NAME: executor
+        SERVICE_NAME: webhook
+    environment:
+      LINKFLOW_DATABASE_HOST: postgres
+      LINKFLOW_DATABASE_PORT: 5432
+      LINKFLOW_DATABASE_NAME: linkflow
+      LINKFLOW_DATABASE_USER: linkflow
+      LINKFLOW_DATABASE_PASSWORD: linkflow123
+      LINKFLOW_REDIS_HOST: redis
+      LINKFLOW_REDIS_PORT: 6379
+      LINKFLOW_KAFKA_BROKERS: kafka:29092
+      LINKFLOW_SERVER_PORT: 8006
+    ports:
+      - "8006:8006"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    networks:
+      - linkflow-network
+
+  # Port 8007 - Credential Service
+  credential-service:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+      args:
+        SERVICE_NAME: credential
+    environment:
+      LINKFLOW_DATABASE_HOST: postgres
+      LINKFLOW_DATABASE_PORT: 5432
+      LINKFLOW_DATABASE_NAME: linkflow
+      LINKFLOW_DATABASE_USER: linkflow
+      LINKFLOW_DATABASE_PASSWORD: linkflow123
+      LINKFLOW_REDIS_HOST: redis
+      LINKFLOW_REDIS_PORT: 6379
+      LINKFLOW_SERVER_PORT: 8007
+    ports:
+      - "8007:8007"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - linkflow-network
+
+  # Port 8008 - Variable Service
+  variable-service:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+      args:
+        SERVICE_NAME: variable
+    environment:
+      LINKFLOW_DATABASE_HOST: postgres
+      LINKFLOW_DATABASE_PORT: 5432
+      LINKFLOW_DATABASE_NAME: linkflow
+      LINKFLOW_DATABASE_USER: linkflow
+      LINKFLOW_DATABASE_PASSWORD: linkflow123
+      LINKFLOW_SERVER_PORT: 8008
+    ports:
+      - "8008:8008"
+    depends_on:
+      - postgres
+    networks:
+      - linkflow-network
+
+  # Port 8009 - Schedule Service
+  schedule-service:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+      args:
+        SERVICE_NAME: schedule
+    environment:
+      LINKFLOW_DATABASE_HOST: postgres
+      LINKFLOW_DATABASE_PORT: 5432
+      LINKFLOW_DATABASE_NAME: linkflow
+      LINKFLOW_DATABASE_USER: linkflow
+      LINKFLOW_DATABASE_PASSWORD: linkflow123
+      LINKFLOW_REDIS_HOST: redis
+      LINKFLOW_REDIS_PORT: 6379
+      LINKFLOW_KAFKA_BROKERS: kafka:29092
+      LINKFLOW_SERVER_PORT: 8009
+    ports:
+      - "8009:8009"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    networks:
+      - linkflow-network
+
+  # Port 8010 - Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+      args:
+        SERVICE_NAME: notification
+    environment:
+      LINKFLOW_DATABASE_HOST: postgres
+      LINKFLOW_DATABASE_PORT: 5432
+      LINKFLOW_DATABASE_NAME: linkflow
+      LINKFLOW_DATABASE_USER: linkflow
+      LINKFLOW_DATABASE_PASSWORD: linkflow123
+      LINKFLOW_REDIS_HOST: redis
+      LINKFLOW_REDIS_PORT: 6379
+      LINKFLOW_KAFKA_BROKERS: kafka:29092
+      LINKFLOW_SERVER_PORT: 8010
+    ports:
+      - "8010:8010"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    networks:
+      - linkflow-network
+
+  # Port 8011 - Audit Service
+  audit-service:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+      args:
+        SERVICE_NAME: audit
+    environment:
+      LINKFLOW_DATABASE_HOST: postgres
+      LINKFLOW_DATABASE_PORT: 5432
+      LINKFLOW_DATABASE_NAME: linkflow
+      LINKFLOW_DATABASE_USER: linkflow
+      LINKFLOW_DATABASE_PASSWORD: linkflow123
+      LINKFLOW_KAFKA_BROKERS: kafka:29092
+      LINKFLOW_SERVER_PORT: 8011
+    ports:
+      - "8011:8011"
+    depends_on:
+      - postgres
+      - kafka
+    networks:
+      - linkflow-network
+
+  # Port 8012 - Analytics Service
+  analytics-service:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+      args:
+        SERVICE_NAME: analytics
     environment:
       LINKFLOW_DATABASE_HOST: postgres
       LINKFLOW_DATABASE_PORT: 5432
@@ -425,18 +445,20 @@ services:
     networks:
       - linkflow-network
 
-  notification-service:
+  # Port 8013 - Search Service
+  search-service:
     build:
       context: .
       dockerfile: deployments/docker/Dockerfile
       args:
-        SERVICE_NAME: notification
+        SERVICE_NAME: search
     environment:
       LINKFLOW_DATABASE_HOST: postgres
       LINKFLOW_DATABASE_PORT: 5432
       LINKFLOW_DATABASE_NAME: linkflow
       LINKFLOW_DATABASE_USER: linkflow
       LINKFLOW_DATABASE_PASSWORD: linkflow123
+      LINKFLOW_ELASTICSEARCH_URL: http://elasticsearch:9200
       LINKFLOW_REDIS_HOST: redis
       LINKFLOW_REDIS_PORT: 6379
       LINKFLOW_KAFKA_BROKERS: kafka:29092
@@ -445,17 +467,19 @@ services:
       - "8013:8013"
     depends_on:
       - postgres
+      - elasticsearch
       - redis
       - kafka
     networks:
       - linkflow-network
 
-  analytics-service:
+  # Port 8014 - Storage Service
+  storage-service:
     build:
       context: .
       dockerfile: deployments/docker/Dockerfile
       args:
-        SERVICE_NAME: analytics
+        SERVICE_NAME: storage
     environment:
       LINKFLOW_DATABASE_HOST: postgres
       LINKFLOW_DATABASE_PORT: 5432
@@ -468,6 +492,75 @@ services:
       LINKFLOW_SERVER_PORT: 8014
     ports:
       - "8014:8014"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    networks:
+      - linkflow-network
+
+  # Port 8015 - Billing Service
+  billing-service:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+      args:
+        SERVICE_NAME: billing
+    environment:
+      LINKFLOW_DATABASE_HOST: postgres
+      LINKFLOW_DATABASE_PORT: 5432
+      LINKFLOW_DATABASE_NAME: linkflow
+      LINKFLOW_DATABASE_USER: linkflow
+      LINKFLOW_DATABASE_PASSWORD: linkflow123
+      LINKFLOW_REDIS_HOST: redis
+      LINKFLOW_REDIS_PORT: 6379
+      LINKFLOW_KAFKA_BROKERS: kafka:29092
+      LINKFLOW_SERVER_PORT: 8015
+    ports:
+      - "8015:8015"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    networks:
+      - linkflow-network
+
+  # Port 8016 - WebSocket Service
+  websocket-service:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+      args:
+        SERVICE_NAME: websocket
+    environment:
+      LINKFLOW_KAFKA_BROKERS: kafka:29092
+      LINKFLOW_SERVER_PORT: 8016
+    ports:
+      - "8016:8016"
+    depends_on:
+      - kafka
+    networks:
+      - linkflow-network
+
+  # Port 8017 - Executor Service (Worker)
+  executor-service:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+      args:
+        SERVICE_NAME: executor
+    environment:
+      LINKFLOW_DATABASE_HOST: postgres
+      LINKFLOW_DATABASE_PORT: 5432
+      LINKFLOW_DATABASE_NAME: linkflow
+      LINKFLOW_DATABASE_USER: linkflow
+      LINKFLOW_DATABASE_PASSWORD: linkflow123
+      LINKFLOW_REDIS_HOST: redis
+      LINKFLOW_REDIS_PORT: 6379
+      LINKFLOW_KAFKA_BROKERS: kafka:29092
+      LINKFLOW_SERVER_PORT: 8017
+    ports:
+      - "8017:8017"
     depends_on:
       - postgres
       - redis

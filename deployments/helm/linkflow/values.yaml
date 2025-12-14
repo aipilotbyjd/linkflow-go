@@ -122,43 +122,43 @@ services:
     service:
       port: 8005
 
-  credential:
-    enabled: true
-    replicaCount: 2
-    service:
-      port: 8006
-
   webhook:
     enabled: true
     replicaCount: 3
     service:
+      port: 8006
+
+  credential:
+    enabled: true
+    replicaCount: 2
+    service:
       port: 8007
 
-  schedule:
+  variable:
     enabled: true
     replicaCount: 2
     service:
       port: 8008
 
-  notification:
+  schedule:
     enabled: true
     replicaCount: 2
     service:
       port: 8009
 
-  audit:
+  notification:
     enabled: true
     replicaCount: 2
     service:
       port: 8010
 
-  analytics:
+  audit:
     enabled: true
     replicaCount: 2
     service:
       port: 8011
 
-  storage:
+  analytics:
     enabled: true
     replicaCount: 2
     service:
@@ -170,11 +170,30 @@ services:
     service:
       port: 8013
 
+  storage:
+    enabled: true
+    replicaCount: 2
+    service:
+      port: 8014
+
   billing:
     enabled: false
     replicaCount: 2
     service:
-      port: 8014
+      port: 8015
+
+  websocket:
+    enabled: true
+    replicaCount: 3
+    service:
+      port: 8016
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
 
 # GraphQL Gateway
 graphql:

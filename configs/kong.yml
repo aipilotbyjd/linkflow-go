@@ -233,6 +233,238 @@ services:
           size_unit: megabytes
 
   # ==========================================
+  # NODE SERVICE
+  # ==========================================
+  - name: node-service
+    url: http://node-service:8005
+    retries: 3
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      - name: node-management
+        paths:
+          - /api/v1/nodes
+        strip_path: false
+        preserve_host: true
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+
+  # ==========================================
+  # CREDENTIAL SERVICE
+  # ==========================================
+  - name: credential-service
+    url: http://credential-service:8007
+    retries: 3
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      - name: credential-management
+        paths:
+          - /api/v1/credentials
+        strip_path: false
+        preserve_host: true
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+
+  # ==========================================
+  # VARIABLE SERVICE
+  # ==========================================
+  - name: variable-service
+    url: http://variable-service:8008
+    retries: 3
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      - name: variable-management
+        paths:
+          - /api/v1/variables
+        strip_path: false
+        preserve_host: true
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+
+  # ==========================================
+  # SCHEDULE SERVICE
+  # ==========================================
+  - name: schedule-service
+    url: http://schedule-service:8009
+    retries: 3
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      - name: schedule-management
+        paths:
+          - /api/v1/schedules
+        strip_path: false
+        preserve_host: true
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+
+  # ==========================================
+  # NOTIFICATION SERVICE
+  # ==========================================
+  - name: notification-service
+    url: http://notification-service:8010
+    retries: 3
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      - name: notification-management
+        paths:
+          - /api/v1/notifications
+        strip_path: false
+        preserve_host: true
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+
+  # ==========================================
+  # AUDIT SERVICE
+  # ==========================================
+  - name: audit-service
+    url: http://audit-service:8011
+    retries: 3
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      - name: audit-logs
+        paths:
+          - /api/v1/audit
+        strip_path: false
+        preserve_host: true
+        methods: [GET, OPTIONS]
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+
+  # ==========================================
+  # ANALYTICS SERVICE
+  # ==========================================
+  - name: analytics-service
+    url: http://analytics-service:8012
+    retries: 3
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      - name: analytics-data
+        paths:
+          - /api/v1/analytics
+        strip_path: false
+        preserve_host: true
+        methods: [GET, OPTIONS]
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+
+  # ==========================================
+  # SEARCH SERVICE
+  # ==========================================
+  - name: search-service
+    url: http://search-service:8013
+    retries: 3
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      - name: search-api
+        paths:
+          - /api/v1/search
+        strip_path: false
+        preserve_host: true
+        methods: [GET, POST, OPTIONS]
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+
+  # ==========================================
+  # STORAGE SERVICE
+  # ==========================================
+  - name: storage-service
+    url: http://storage-service:8014
+    retries: 3
+    connect_timeout: 60000
+    write_timeout: 120000
+    read_timeout: 120000
+    routes:
+      - name: storage-api
+        paths:
+          - /api/v1/storage
+        strip_path: false
+        preserve_host: true
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+      - name: request-size-limiting
+        config:
+          allowed_payload_size: 100
+          size_unit: megabytes
+
+  # ==========================================
+  # BILLING SERVICE
+  # ==========================================
+  - name: billing-service
+    url: http://billing-service:8015
+    retries: 3
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      - name: billing-api
+        paths:
+          - /api/v1/billing
+        strip_path: false
+        preserve_host: true
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+
+  # ==========================================
+  # WEBSOCKET SERVICE
+  # ==========================================
+  - name: websocket-service
+    url: http://websocket-service:8016
+    retries: 1
+    connect_timeout: 60000
+    write_timeout: 0
+    read_timeout: 0
+    routes:
+      - name: websocket-connection
+        paths:
+          - /ws
+        strip_path: false
+        preserve_host: true
+        methods: [GET]
+        protocols: [http, https]
+
+  # ==========================================
   # HEALTH CHECK (No Auth)
   # ==========================================
   - name: health-service

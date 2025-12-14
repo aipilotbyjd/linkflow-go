@@ -27,6 +27,7 @@ resources:
   - services/search.yaml
   - services/storage.yaml
   - services/billing.yaml
+  - services/websocket.yaml
   
   # Monitoring
   - monitoring/prometheus-deployment.yaml

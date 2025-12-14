@@ -191,6 +191,17 @@ spec:
         port:
           number: 8080
     timeout: 30s
+
+  # WebSocket Service
+  - match:
+    - uri:
+        prefix: /ws
+    route:
+    - destination:
+        host: websocket-service
+        port:
+          number: 8080
+    timeout: 0s  # No timeout for WebSocket connections
 ---
 # Canary deployment for workflow service
 apiVersion: networking.istio.io/v1beta1
