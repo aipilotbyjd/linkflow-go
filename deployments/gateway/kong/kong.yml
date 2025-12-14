@@ -251,8 +251,9 @@ services:
   - name: websocket-service
     url: http://websocket-service:8016
     retries: 1
-    write_timeout: 0
-    read_timeout: 0
+    connect_timeout: 60000
+    write_timeout: 3600000
+    read_timeout: 3600000
     routes:
       - name: websocket-connection
         paths: [/ws]
