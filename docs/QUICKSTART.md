@@ -64,12 +64,19 @@ make logs
 ## Database Commands
 
 ```bash
-make migrate-up         # Apply all migrations
-make migrate-down       # Rollback 1 migration
-make migrate-status     # Show migration status
-make migrate-reset      # Drop all and re-migrate (DANGER!)
-make db-migrate         # Run migrations via script
-make db-seed            # Add test data
+# Migrations
+make migrate-up              # Apply all pending migrations
+make migrate-down            # Rollback last migration
+make migrate-status          # Show migration status
+make migrate-version         # Show current version
+make migrate-force V=16      # Force version (fix dirty state)
+make migrate-goto V=10       # Migrate to specific version
+make migrate-create NAME=xxx # Create new migration files
+make migrate-reset           # Drop all & re-migrate (DANGER!)
+make migrate-drop            # Drop all schemas (DANGER!)
+
+# Data
+make db-seed                 # Seed database with test data
 ```
 
 ## Docker Commands
@@ -135,13 +142,17 @@ make infra-down         # Stop infrastructure
 make infra-status       # Check infrastructure status
 make infra-logs         # Show infrastructure logs
 
-# Database
-make migrate-up         # Run all migrations up
-make migrate-down       # Rollback 1 migration
-make migrate-status     # Show migration status
-make migrate-reset      # Reset database (drop all + migrate)
-make db-migrate         # Run migrations via script
-make db-seed            # Seed database with test data
+# Database Migrations
+make migrate-up              # Apply all pending migrations
+make migrate-down            # Rollback last migration
+make migrate-status          # Show migration status
+make migrate-version         # Show current version
+make migrate-force V=N       # Force version to N
+make migrate-goto V=N        # Migrate to version N
+make migrate-create NAME=x   # Create new migration
+make migrate-reset           # Drop all & re-migrate (DANGER!)
+make migrate-drop            # Drop all schemas (DANGER!)
+make db-seed                 # Seed database with test data
 
 # Docker
 make docker-build       # Build Docker images

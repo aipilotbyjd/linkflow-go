@@ -183,20 +183,40 @@ mocks: ## Generate mocks
 	@mockgen -source=internal/domain/workflow/repository.go -destination=internal/domain/workflow/mocks/repository.go
 
 .PHONY: migrate-up
-migrate-up: ## Run database migrations up
+migrate-up: ## Apply all pending migrations
 	@./scripts/db/migrate.sh up
 
 .PHONY: migrate-down
-migrate-down: ## Run database migrations down (1 step)
+migrate-down: ## Rollback last migration
 	@./scripts/db/migrate.sh down 1
 
 .PHONY: migrate-status
-migrate-status: ## Show migration status
+migrate-status: ## Show current migration version and status
 	@./scripts/db/migrate.sh status
 
+.PHONY: migrate-version
+migrate-version: ## Show current migration version
+	@./scripts/db/migrate.sh version
+
+.PHONY: migrate-force
+migrate-force: ## Force migration version (usage: make migrate-force V=16)
+	@./scripts/db/migrate.sh force $(V)
+
+.PHONY: migrate-goto
+migrate-goto: ## Migrate to specific version (usage: make migrate-goto V=10)
+	@./scripts/db/migrate.sh goto $(V)
+
+.PHONY: migrate-create
+migrate-create: ## Create new migration (usage: make migrate-create NAME=add_users)
+	@./scripts/db/migrate.sh create $(NAME)
+
 .PHONY: migrate-reset
-migrate-reset: ## Reset database (drop all and re-migrate)
+migrate-reset: ## Drop all schemas and re-run migrations (DANGER!)
 	@./scripts/db/migrate.sh reset
+
+.PHONY: migrate-drop
+migrate-drop: ## Drop all schemas without re-migrating (DANGER!)
+	@./scripts/db/migrate.sh drop
 
 .PHONY: run-local
 run-local: ## Run services locally with docker-compose
