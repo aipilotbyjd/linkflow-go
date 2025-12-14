@@ -184,13 +184,19 @@ mocks: ## Generate mocks
 
 .PHONY: migrate-up
 migrate-up: ## Run database migrations up
-	@echo "${GREEN}Running migrations up...${NC}"
-	@migrate -path migrations -database "postgres://localhost/linkflow?sslmode=disable" up
+	@./scripts/db/migrate.sh up
 
 .PHONY: migrate-down
-migrate-down: ## Run database migrations down
-	@echo "${GREEN}Running migrations down...${NC}"
-	@migrate -path migrations -database "postgres://localhost/linkflow?sslmode=disable" down
+migrate-down: ## Run database migrations down (1 step)
+	@./scripts/db/migrate.sh down 1
+
+.PHONY: migrate-status
+migrate-status: ## Show migration status
+	@./scripts/db/migrate.sh status
+
+.PHONY: migrate-reset
+migrate-reset: ## Reset database (drop all and re-migrate)
+	@./scripts/db/migrate.sh reset
 
 .PHONY: run-local
 run-local: ## Run services locally with docker-compose

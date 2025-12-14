@@ -36,27 +36,39 @@ make kafka-setup        # Create Kafka topics
 ## Development Workflow
 
 ```bash
-# 1. Start infrastructure
+# 1. Start infrastructure (postgres, redis, kafka)
 make infra-up
 
 # 2. Run migrations
-make db-migrate
+make migrate-up
 
-# 3. Build services
+# 3. Check migration status
+make migrate-status
+
+# 4. Seed test data (optional)
+make db-seed
+
+# 5. Build services
 make build
 
-# 4. Start services
+# 6. Start all services
 make run-local
 
-# 5. Check status
+# 7. Check status
 make infra-status
+
+# 8. View logs
+make logs
 ```
 
 ## Database Commands
 
 ```bash
-make migrate-up         # Apply migrations
-make migrate-down       # Rollback migrations
+make migrate-up         # Apply all migrations
+make migrate-down       # Rollback 1 migration
+make migrate-status     # Show migration status
+make migrate-reset      # Drop all and re-migrate (DANGER!)
+make db-migrate         # Run migrations via script
 make db-seed            # Add test data
 ```
 
@@ -124,9 +136,11 @@ make infra-status       # Check infrastructure status
 make infra-logs         # Show infrastructure logs
 
 # Database
-make migrate-up         # Run migrations up
-make migrate-down       # Run migrations down
-make db-migrate         # Run database migrations
+make migrate-up         # Run all migrations up
+make migrate-down       # Rollback 1 migration
+make migrate-status     # Show migration status
+make migrate-reset      # Reset database (drop all + migrate)
+make db-migrate         # Run migrations via script
 make db-seed            # Seed database with test data
 
 # Docker

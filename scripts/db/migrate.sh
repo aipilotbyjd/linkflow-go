@@ -17,10 +17,22 @@ DB_PASSWORD=${LINKFLOW_DB_PASSWORD:-linkflow123}
 DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable"
 MIGRATIONS_PATH="migrations"
 
+# Add Go bin to PATH
+export PATH="$PATH:$(go env GOPATH)/bin:$HOME/go/bin"
+
 # Check if migrate tool is installed
 if ! command -v migrate &> /dev/null; then
     echo -e "${YELLOW}migrate tool not found. Installing...${NC}"
     go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+    
+    # Verify installation
+    if ! command -v migrate &> /dev/null; then
+        echo -e "${RED}Failed to install migrate. Please install manually:${NC}"
+        echo "go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest"
+        echo "Then add \$(go env GOPATH)/bin to your PATH"
+        exit 1
+    fi
+    echo -e "${GREEN}migrate tool installed successfully!${NC}"
 fi
 
 up() {
@@ -60,12 +72,29 @@ create() {
 }
 
 reset() {
-    echo -e "${RED}WARNING: This will drop all tables and re-run migrations!${NC}"
+    echo -e "${RED}WARNING: This will drop ALL schemas and re-run migrations!${NC}"
     read -p "Are you sure? (y/N) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo -e "${YELLOW}Dropping all tables...${NC}"
-        migrate -path $MIGRATIONS_PATH -database "$DATABASE_URL" drop -f
+        echo -e "${YELLOW}Dropping all schemas...${NC}"
+        PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "
+            DROP SCHEMA IF EXISTS auth CASCADE;
+            DROP SCHEMA IF EXISTS workflow CASCADE;
+            DROP SCHEMA IF EXISTS execution CASCADE;
+            DROP SCHEMA IF EXISTS node CASCADE;
+            DROP SCHEMA IF EXISTS schedule CASCADE;
+            DROP SCHEMA IF EXISTS credential CASCADE;
+            DROP SCHEMA IF EXISTS webhook CASCADE;
+            DROP SCHEMA IF EXISTS variable CASCADE;
+            DROP SCHEMA IF EXISTS notification CASCADE;
+            DROP SCHEMA IF EXISTS audit CASCADE;
+            DROP SCHEMA IF EXISTS analytics CASCADE;
+            DROP SCHEMA IF EXISTS search CASCADE;
+            DROP SCHEMA IF EXISTS storage CASCADE;
+            DROP SCHEMA IF EXISTS billing CASCADE;
+            DROP SCHEMA IF EXISTS template CASCADE;
+            DROP TABLE IF EXISTS schema_migrations CASCADE;
+        "
         echo -e "${GREEN}Running migrations...${NC}"
         migrate -path $MIGRATIONS_PATH -database "$DATABASE_URL" up
         echo -e "${GREEN}Reset completed!${NC}"
