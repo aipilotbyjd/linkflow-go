@@ -11,21 +11,23 @@ type Schedule struct {
 	ID             string                 `json:"id" gorm:"primaryKey"`
 	Name           string                 `json:"name" gorm:"not null"`
 	Description    string                 `json:"description"`
-	WorkflowID     string                 `json:"workflowId" gorm:"not null;index"`
-	UserID         string                 `json:"userId" gorm:"not null;index"`
-	TeamID         string                 `json:"teamId" gorm:"index"`
-	CronExpression string                 `json:"cronExpression" gorm:"not null"`
+	WorkflowID     string                 `json:"workflowId" gorm:"column:workflow_id;not null;index"`
+	UserID         string                 `json:"userId" gorm:"column:user_id;not null;index"`
+	TeamID         string                 `json:"teamId" gorm:"column:team_id;index"`
+	CronExpression string                 `json:"cronExpression" gorm:"column:cron_expression;not null"`
 	Timezone       string                 `json:"timezone" gorm:"default:'UTC'"`
-	Data           map[string]interface{} `json:"data" gorm:"serializer:json"`
-	IsActive       bool                   `json:"isActive" gorm:"default:true"`
-	StartDate      *time.Time             `json:"startDate"`
-	EndDate        *time.Time             `json:"endDate"`
-	LastRunAt      *time.Time             `json:"lastRunAt"`
-	NextRunAt      *time.Time             `json:"nextRunAt"`
-	MisfirePolicy  string                 `json:"misfirePolicy" gorm:"default:'skip'"`
-	Tags           []string               `json:"tags" gorm:"serializer:json"`
-	CreatedAt      time.Time              `json:"createdAt"`
-	UpdatedAt      time.Time              `json:"updatedAt"`
+	Data           map[string]interface{} `json:"data" gorm:"column:input_data;serializer:json"`
+	IsActive       bool                   `json:"isActive" gorm:"column:is_active;default:true"`
+	StartDate      *time.Time             `json:"startDate" gorm:"column:start_date"`
+	EndDate        *time.Time             `json:"endDate" gorm:"column:end_date"`
+	LastRunAt      *time.Time             `json:"lastRunAt" gorm:"column:last_run_at"`
+	NextRunAt      *time.Time             `json:"nextRunAt" gorm:"column:next_run_at"`
+	RunCount       int64                  `json:"runCount" gorm:"column:run_count;default:0"`
+	MisfirePolicy  string                 `json:"misfirePolicy" gorm:"column:misfire_policy;default:'skip'"`
+	MaxRetries     int                    `json:"maxRetries" gorm:"column:max_retries;default:3"`
+	Tags           []string               `json:"tags" gorm:"type:text[];serializer:json"`
+	CreatedAt      time.Time              `json:"createdAt" gorm:"column:created_at"`
+	UpdatedAt      time.Time              `json:"updatedAt" gorm:"column:updated_at"`
 }
 
 // TableName specifies the table name for GORM
@@ -34,15 +36,19 @@ func (Schedule) TableName() string {
 }
 
 type ScheduleExecution struct {
-	ID          string                 `json:"id" gorm:"primaryKey"`
-	ScheduleID  string                 `json:"scheduleId" gorm:"not null;index"`
-	WorkflowID  string                 `json:"workflowId" gorm:"not null;index"`
-	ExecutionID string                 `json:"executionId"`
-	TriggeredAt time.Time              `json:"triggeredAt"`
-	Status      string                 `json:"status"`
-	Error       string                 `json:"error"`
-	Data        map[string]interface{} `json:"data" gorm:"serializer:json"`
-	CreatedAt   time.Time              `json:"createdAt"`
+	ID           string     `json:"id" gorm:"primaryKey"`
+	ScheduleID   string     `json:"scheduleId" gorm:"column:schedule_id;not null;index"`
+	ExecutionID  string     `json:"executionId" gorm:"column:execution_id"`
+	ScheduledAt  time.Time  `json:"scheduledAt" gorm:"column:scheduled_at;not null"`
+	TriggeredAt  *time.Time `json:"triggeredAt" gorm:"column:triggered_at"`
+	Status       string     `json:"status" gorm:"default:'pending'"`
+	ErrorMessage string     `json:"error" gorm:"column:error_message"`
+	CreatedAt    time.Time  `json:"createdAt" gorm:"column:created_at"`
+}
+
+// TableName specifies the table name for ScheduleExecution
+func (ScheduleExecution) TableName() string {
+	return "schedule.schedule_executions"
 }
 
 // Misfire policies

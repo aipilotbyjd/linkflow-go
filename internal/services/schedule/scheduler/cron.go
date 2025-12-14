@@ -293,12 +293,13 @@ func (j *scheduleJob) Run() {
 	)
 	
 	// Record execution
+	now := time.Now()
 	execution := &schedule.ScheduleExecution{
-		ID:         uuid.New().String(),
-		ScheduleID: j.schedule.ID,
-		WorkflowID: j.schedule.WorkflowID,
-		TriggeredAt: time.Now(),
-		Status:     "triggered",
+		ID:          uuid.New().String(),
+		ScheduleID:  j.schedule.ID,
+		ScheduledAt: now,
+		TriggeredAt: &now,
+		Status:      "triggered",
 	}
 	
 	if err := j.scheduler.repository.RecordExecution(ctx, execution); err != nil {
@@ -317,7 +318,7 @@ func (j *scheduleJob) Run() {
 	if err := j.scheduler.eventBus.Publish(ctx, event); err != nil {
 		j.scheduler.logger.Error("Failed to publish schedule triggered event", "error", err)
 		execution.Status = "failed"
-		execution.Error = err.Error()
+		execution.ErrorMessage = err.Error()
 	} else {
 		execution.Status = "success"
 	}
@@ -326,7 +327,7 @@ func (j *scheduleJob) Run() {
 	j.scheduler.repository.RecordExecution(ctx, execution)
 	
 	// Update last run time
-	j.schedule.LastRunAt = &execution.TriggeredAt
+	j.schedule.LastRunAt = execution.TriggeredAt
 	j.schedule.NextRunAt = j.getNextRunTime()
 	j.scheduler.repository.Update(ctx, j.schedule)
 }
