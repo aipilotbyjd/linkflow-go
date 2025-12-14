@@ -79,51 +79,51 @@ infra-logs: ## Show infrastructure logs
 .PHONY: dev-setup
 dev-setup: ## Complete development environment setup
 	@echo "${GREEN}Setting up development environment...${NC}"
-	@./scripts/dev-setup.sh
+	@./scripts/dev/dev-setup.sh
 
 .PHONY: kafka-setup
 kafka-setup: ## Setup Kafka topics
 	@echo "${GREEN}Setting up Kafka topics...${NC}"
-	@./scripts/kafka-setup.sh setup
+	@./scripts/install/kafka.sh setup
 
 .PHONY: db-migrate
 db-migrate: ## Run database migrations
 	@echo "${GREEN}Running database migrations...${NC}"
-	@./scripts/migrate.sh up
+	@./scripts/db/migrate.sh up
 
 .PHONY: db-seed
 db-seed: ## Seed database with test data
 	@echo "${GREEN}Seeding database...${NC}"
-	@./scripts/seed.sh
+	@./scripts/db/seed.sh
 
 .PHONY: k8s-deploy
 k8s-deploy: ## Deploy to Kubernetes
 	@echo "${GREEN}Deploying to Kubernetes...${NC}"
-	@./scripts/k8s-deploy.sh deploy
+	@./scripts/deploy/k8s.sh deploy
 
 .PHONY: k8s-status
 k8s-status: ## Check Kubernetes deployment status
-	@./scripts/k8s-deploy.sh status
+	@./scripts/deploy/k8s.sh status
 
 .PHONY: argocd-install
 argocd-install: ## Install ArgoCD
 	@echo "${GREEN}Installing ArgoCD...${NC}"
-	@./scripts/install-argocd.sh install
+	@./scripts/install/argocd.sh install
 
 .PHONY: argocd-setup
 argocd-setup: ## Configure ArgoCD for LinkFlow
 	@echo "${GREEN}Configuring ArgoCD...${NC}"
-	@./scripts/install-argocd.sh configure
+	@./scripts/install/argocd.sh configure
 
 .PHONY: istio-install
 istio-install: ## Install Istio service mesh
 	@echo "${GREEN}Installing Istio...${NC}"
-	@./scripts/install-istio.sh install
+	@./scripts/install/istio.sh install
 
 .PHONY: istio-setup
 istio-setup: ## Configure Istio for LinkFlow
 	@echo "${GREEN}Configuring Istio...${NC}"
-	@./scripts/install-istio.sh apply-config
+	@./scripts/install/istio.sh apply-config
 
 .PHONY: logging-deploy
 logging-deploy: ## Deploy log aggregation stack (ELK/Loki)

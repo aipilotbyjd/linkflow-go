@@ -210,7 +210,7 @@ helm uninstall linkflow --namespace linkflow
 
 ```bash
 # Install Istio
-./scripts/install-istio.sh install
+./scripts/install/istio.sh install
 
 # Enable sidecar injection
 kubectl label namespace linkflow istio-injection=enabled
@@ -228,7 +228,7 @@ istioctl dashboard jaeger    # Distributed tracing
 
 ```bash
 # Install ArgoCD
-./scripts/install-argocd.sh install
+./scripts/install/argocd.sh install
 
 # Apply LinkFlow applications
 kubectl apply -f deployments/config/argocd/

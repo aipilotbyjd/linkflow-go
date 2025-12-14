@@ -84,22 +84,22 @@ wait_for_service localhost 9200 "Elasticsearch"
 # Run migrations
 echo ""
 echo -e "${YELLOW}Running database migrations...${NC}"
-if [ -f scripts/migrate.sh ]; then
-    ./scripts/migrate.sh up || echo -e "${YELLOW}Migration script not fully configured${NC}"
+if [ -f scripts/db/migrate.sh ]; then
+    ./scripts/db/migrate.sh up || echo -e "${YELLOW}Migration script not fully configured${NC}"
 fi
 
 # Setup Kafka topics
 echo ""
 echo -e "${YELLOW}Setting up Kafka topics...${NC}"
-if [ -f scripts/kafka-setup.sh ]; then
-    ./scripts/kafka-setup.sh setup || echo -e "${YELLOW}Kafka setup not fully configured${NC}"
+if [ -f scripts/install/kafka.sh ]; then
+    ./scripts/install/kafka.sh setup || echo -e "${YELLOW}Kafka setup not fully configured${NC}"
 fi
 
 # Seed database
 echo ""
 echo -e "${YELLOW}Seeding database...${NC}"
-if [ -f scripts/seed.sh ]; then
-    ./scripts/seed.sh || echo -e "${YELLOW}Seed script not fully configured${NC}"
+if [ -f scripts/db/seed.sh ]; then
+    ./scripts/db/seed.sh || echo -e "${YELLOW}Seed script not fully configured${NC}"
 fi
 
 # Build services
