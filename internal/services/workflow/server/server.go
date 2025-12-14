@@ -259,7 +259,7 @@ func authMiddleware() gin.HandlerFunc {
 		if userID == "" {
 			// Check if we're in development mode
 			if gin.Mode() != gin.ReleaseMode {
-				userID = "dev-user-001"
+				userID = "00000000-0000-0000-0000-000000000001"
 			} else {
 				c.JSON(401, gin.H{"error": "unauthorized"})
 				c.Abort()
