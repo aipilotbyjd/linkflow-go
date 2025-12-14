@@ -10,12 +10,8 @@ import (
 // This should be called with the protected auth routes group
 func SetupRoutes(protected *gin.RouterGroup, db *gorm.DB, log logger.Logger) *Handlers {
 	// Create repository
+	// Note: Database migrations are handled via SQL migration files in /migrations
 	repo := NewGormAPIKeyRepository(db)
-
-	// Run migrations
-	if err := repo.Migrate(); err != nil {
-		log.Error("Failed to migrate API keys table", "error", err)
-	}
 
 	// Create service
 	service := NewAPIKeyService(repo)

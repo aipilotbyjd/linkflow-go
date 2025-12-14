@@ -16,15 +16,20 @@ type NodeType struct {
 	Version     string     `json:"version"`
 	Author      string     `json:"author"`
 	Schema      NodeSchema `json:"schema" gorm:"serializer:json"`
-	Config      NodeConfig `json:"config" gorm:"serializer:json"`
+	Config      NodeConfig `json:"config" gorm:"column:default_config;serializer:json"`
 	Status      string     `json:"status" gorm:"default:'active'"`
-	IsBuiltin   bool       `json:"isBuiltin" gorm:"default:false"`
-	IsPublic    bool       `json:"isPublic" gorm:"default:false"`
-	Downloads   int        `json:"downloads" gorm:"default:0"`
-	Rating      float32    `json:"rating" gorm:"default:0"`
+	IsBuiltin   bool       `json:"isBuiltin" gorm:"column:is_builtin;default:false"`
+	IsPublic    bool       `json:"isPublic" gorm:"column:is_public;default:false"`
+	Downloads   int        `json:"downloads" gorm:"column:download_count;default:0"`
+	Rating      float32    `json:"rating" gorm:"column:avg_rating;default:0"`
 	Tags        []string   `json:"tags" gorm:"serializer:json"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"`
+	CreatedAt   time.Time  `json:"createdAt" gorm:"column:created_at"`
+	UpdatedAt   time.Time  `json:"updatedAt" gorm:"column:updated_at"`
+}
+
+// TableName specifies the table name for GORM
+func (NodeType) TableName() string {
+	return "node.node_types"
 }
 
 type NodeSchema struct {
@@ -83,30 +88,30 @@ type Position struct {
 }
 
 type NodeInstanceConfig struct {
-	Disabled         bool `json:"disabled"`
-	ContinueOnFail   bool `json:"continueOnFail"`
-	RetryOnFail      bool `json:"retryOnFail"`
-	MaxRetries       int  `json:"maxRetries"`
-	WaitBetweenTries int  `json:"waitBetweenTries"`
-	Timeout          int  `json:"timeout"`
+	Disabled         bool   `json:"disabled"`
+	ContinueOnFail   bool   `json:"continueOnFail"`
+	RetryOnFail      bool   `json:"retryOnFail"`
+	MaxRetries       int    `json:"maxRetries"`
+	WaitBetweenTries int    `json:"waitBetweenTries"`
+	Timeout          int    `json:"timeout"`
 	Notes            string `json:"notes"`
 }
 
 type NodeExecution struct {
-	ID           string                 `json:"id" gorm:"primaryKey"`
-	ExecutionID  string                 `json:"executionId" gorm:"not null;index"`
-	NodeID       string                 `json:"nodeId" gorm:"not null"`
-	NodeType     string                 `json:"nodeType"`
-	Status       string                 `json:"status"`
-	StartedAt    time.Time              `json:"startedAt"`
-	FinishedAt   *time.Time             `json:"finishedAt"`
-	ExecutionTime int64                 `json:"executionTime"`
-	InputData    map[string]interface{} `json:"inputData" gorm:"serializer:json"`
-	OutputData   map[string]interface{} `json:"outputData" gorm:"serializer:json"`
-	Error        string                 `json:"error"`
-	RetryCount   int                    `json:"retryCount"`
-	Metadata     map[string]interface{} `json:"metadata" gorm:"serializer:json"`
-	CreatedAt    time.Time              `json:"createdAt"`
+	ID            string                 `json:"id" gorm:"primaryKey"`
+	ExecutionID   string                 `json:"executionId" gorm:"not null;index"`
+	NodeID        string                 `json:"nodeId" gorm:"not null"`
+	NodeType      string                 `json:"nodeType"`
+	Status        string                 `json:"status"`
+	StartedAt     time.Time              `json:"startedAt"`
+	FinishedAt    *time.Time             `json:"finishedAt"`
+	ExecutionTime int64                  `json:"executionTime"`
+	InputData     map[string]interface{} `json:"inputData" gorm:"serializer:json"`
+	OutputData    map[string]interface{} `json:"outputData" gorm:"serializer:json"`
+	Error         string                 `json:"error"`
+	RetryCount    int                    `json:"retryCount"`
+	Metadata      map[string]interface{} `json:"metadata" gorm:"serializer:json"`
+	CreatedAt     time.Time              `json:"createdAt"`
 }
 
 // Node categories
@@ -165,20 +170,20 @@ func (n *NodeType) Validate() error {
 	if n.Category == "" {
 		return errors.New("node category is required")
 	}
-	
+
 	// Validate schema
 	for _, field := range n.Schema.Inputs {
 		if err := validateSchemaField(field); err != nil {
 			return err
 		}
 	}
-	
+
 	for _, field := range n.Schema.Outputs {
 		if err := validateSchemaField(field); err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -189,7 +194,7 @@ func validateSchemaField(field SchemaField) error {
 	if field.Type == "" {
 		return errors.New("field type is required")
 	}
-	
+
 	// Validate field type
 	validTypes := []string{
 		FieldTypeString, FieldTypeNumber, FieldTypeBoolean,
@@ -197,7 +202,7 @@ func validateSchemaField(field SchemaField) error {
 		FieldTypeCredential, FieldTypeCode, FieldTypeSelect,
 		FieldTypeDate, FieldTypeText, FieldTypeAny,
 	}
-	
+
 	valid := false
 	for _, t := range validTypes {
 		if field.Type == t {
@@ -205,16 +210,16 @@ func validateSchemaField(field SchemaField) error {
 			break
 		}
 	}
-	
+
 	if !valid {
 		return errors.New("invalid field type: " + field.Type)
 	}
-	
+
 	// Validate select fields have options
 	if field.Type == FieldTypeSelect && len(field.Options) == 0 {
 		return errors.New("select field must have options")
 	}
-	
+
 	return nil
 }
 
@@ -248,7 +253,7 @@ func (n *NodeType) ValidateParameters(parameters map[string]interface{}) error {
 			}
 		}
 	}
-	
+
 	// Validate field types
 	for name, value := range parameters {
 		field := n.Schema.GetInputField(name)
@@ -256,25 +261,25 @@ func (n *NodeType) ValidateParameters(parameters map[string]interface{}) error {
 			// Allow extra parameters for flexibility
 			continue
 		}
-		
+
 		if err := validateFieldValue(field, value); err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
 func validateFieldValue(field *SchemaField, value interface{}) error {
 	// Type validation would go here
 	// This is simplified - in production would have comprehensive type checking
-	
+
 	if field.Type == FieldTypeSelect {
 		strValue, ok := value.(string)
 		if !ok {
 			return errors.New("select field must be a string")
 		}
-		
+
 		// Check if value is in options
 		valid := false
 		for _, option := range field.Options {
@@ -283,11 +288,11 @@ func validateFieldValue(field *SchemaField, value interface{}) error {
 				break
 			}
 		}
-		
+
 		if !valid {
 			return errors.New("invalid option for select field: " + field.Name)
 		}
 	}
-	
+
 	return nil
 }

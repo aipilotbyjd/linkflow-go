@@ -26,7 +26,7 @@ type Credential struct {
 
 // TableName specifies the table name for GORM
 func (Credential) TableName() string {
-	return "workflow.credentials"
+	return "credential.credentials"
 }
 
 type CredentialType struct {

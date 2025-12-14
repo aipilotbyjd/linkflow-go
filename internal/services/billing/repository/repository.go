@@ -16,44 +16,6 @@ func NewBillingRepository(db *database.DB) *BillingRepository {
 	return &BillingRepository{db: db}
 }
 
-// Customer operations
-
-func (r *BillingRepository) CreateCustomer(ctx context.Context, customer *billing.Customer) error {
-	return r.db.WithContext(ctx).Create(customer).Error
-}
-
-func (r *BillingRepository) GetCustomer(ctx context.Context, id string) (*billing.Customer, error) {
-	var customer billing.Customer
-	err := r.db.WithContext(ctx).Where("id = ?", id).First(&customer).Error
-	if err != nil {
-		return nil, billing.ErrCustomerNotFound
-	}
-	return &customer, nil
-}
-
-func (r *BillingRepository) GetCustomerByUserID(ctx context.Context, userID string) (*billing.Customer, error) {
-	var customer billing.Customer
-	err := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&customer).Error
-	if err != nil {
-		return nil, billing.ErrCustomerNotFound
-	}
-	return &customer, nil
-}
-
-func (r *BillingRepository) GetCustomerByStripeID(ctx context.Context, stripeID string) (*billing.Customer, error) {
-	var customer billing.Customer
-	err := r.db.WithContext(ctx).Where("stripe_id = ?", stripeID).First(&customer).Error
-	if err != nil {
-		return nil, billing.ErrCustomerNotFound
-	}
-	return &customer, nil
-}
-
-func (r *BillingRepository) UpdateCustomer(ctx context.Context, customer *billing.Customer) error {
-	customer.UpdatedAt = time.Now()
-	return r.db.WithContext(ctx).Save(customer).Error
-}
-
 // Plan operations
 
 func (r *BillingRepository) CreatePlan(ctx context.Context, plan *billing.Plan) error {
@@ -69,9 +31,9 @@ func (r *BillingRepository) GetPlan(ctx context.Context, id string) (*billing.Pl
 	return &plan, nil
 }
 
-func (r *BillingRepository) GetPlanByStripeID(ctx context.Context, stripeID string) (*billing.Plan, error) {
+func (r *BillingRepository) GetPlanBySlug(ctx context.Context, slug string) (*billing.Plan, error) {
 	var plan billing.Plan
-	err := r.db.WithContext(ctx).Where("stripe_id = ?", stripeID).First(&plan).Error
+	err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&plan).Error
 	if err != nil {
 		return nil, billing.ErrPlanNotFound
 	}
@@ -84,7 +46,7 @@ func (r *BillingRepository) ListPlans(ctx context.Context, activeOnly bool) ([]*
 	if activeOnly {
 		query = query.Where("is_active = ?", true)
 	}
-	err := query.Order("price ASC").Find(&plans).Error
+	err := query.Order("sort_order ASC").Find(&plans).Error
 	return plans, err
 }
 
@@ -112,19 +74,19 @@ func (r *BillingRepository) GetSubscription(ctx context.Context, id string) (*bi
 	return &subscription, nil
 }
 
-func (r *BillingRepository) GetSubscriptionByStripeID(ctx context.Context, stripeID string) (*billing.Subscription, error) {
+func (r *BillingRepository) GetSubscriptionByProviderID(ctx context.Context, providerID string) (*billing.Subscription, error) {
 	var subscription billing.Subscription
-	err := r.db.WithContext(ctx).Where("stripe_id = ?", stripeID).First(&subscription).Error
+	err := r.db.WithContext(ctx).Where("provider_subscription_id = ?", providerID).First(&subscription).Error
 	if err != nil {
 		return nil, billing.ErrSubscriptionNotFound
 	}
 	return &subscription, nil
 }
 
-func (r *BillingRepository) GetActiveSubscription(ctx context.Context, customerID string) (*billing.Subscription, error) {
+func (r *BillingRepository) GetActiveSubscription(ctx context.Context, userID string) (*billing.Subscription, error) {
 	var subscription billing.Subscription
 	err := r.db.WithContext(ctx).
-		Where("customer_id = ? AND status IN ?", customerID, []string{billing.SubscriptionStatusActive, billing.SubscriptionStatusTrialing}).
+		Where("user_id = ? AND status IN ?", userID, []string{billing.SubscriptionStatusActive, billing.SubscriptionStatusTrialing}).
 		First(&subscription).Error
 	if err != nil {
 		return nil, billing.ErrSubscriptionNotFound
@@ -132,10 +94,10 @@ func (r *BillingRepository) GetActiveSubscription(ctx context.Context, customerI
 	return &subscription, nil
 }
 
-func (r *BillingRepository) ListSubscriptions(ctx context.Context, customerID string) ([]*billing.Subscription, error) {
+func (r *BillingRepository) ListSubscriptions(ctx context.Context, userID string) ([]*billing.Subscription, error) {
 	var subscriptions []*billing.Subscription
 	err := r.db.WithContext(ctx).
-		Where("customer_id = ?", customerID).
+		Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Find(&subscriptions).Error
 	return subscriptions, err
@@ -161,19 +123,19 @@ func (r *BillingRepository) GetInvoice(ctx context.Context, id string) (*billing
 	return &invoice, nil
 }
 
-func (r *BillingRepository) GetInvoiceByStripeID(ctx context.Context, stripeID string) (*billing.Invoice, error) {
+func (r *BillingRepository) GetInvoiceByNumber(ctx context.Context, invoiceNumber string) (*billing.Invoice, error) {
 	var invoice billing.Invoice
-	err := r.db.WithContext(ctx).Where("stripe_id = ?", stripeID).First(&invoice).Error
+	err := r.db.WithContext(ctx).Where("invoice_number = ?", invoiceNumber).First(&invoice).Error
 	if err != nil {
 		return nil, billing.ErrInvoiceNotFound
 	}
 	return &invoice, nil
 }
 
-func (r *BillingRepository) ListInvoices(ctx context.Context, customerID string, limit int) ([]*billing.Invoice, error) {
+func (r *BillingRepository) ListInvoices(ctx context.Context, userID string, limit int) ([]*billing.Invoice, error) {
 	var invoices []*billing.Invoice
 	query := r.db.WithContext(ctx).
-		Where("customer_id = ?", customerID).
+		Where("user_id = ?", userID).
 		Order("created_at DESC")
 	if limit > 0 {
 		query = query.Limit(limit)
@@ -202,27 +164,27 @@ func (r *BillingRepository) GetPaymentMethod(ctx context.Context, id string) (*b
 	return &pm, nil
 }
 
-func (r *BillingRepository) ListPaymentMethods(ctx context.Context, customerID string) ([]*billing.PaymentMethod, error) {
+func (r *BillingRepository) ListPaymentMethods(ctx context.Context, userID string) ([]*billing.PaymentMethod, error) {
 	var methods []*billing.PaymentMethod
 	err := r.db.WithContext(ctx).
-		Where("customer_id = ?", customerID).
+		Where("user_id = ?", userID).
 		Order("is_default DESC, created_at DESC").
 		Find(&methods).Error
 	return methods, err
 }
 
-func (r *BillingRepository) SetDefaultPaymentMethod(ctx context.Context, customerID, paymentMethodID string) error {
+func (r *BillingRepository) SetDefaultPaymentMethod(ctx context.Context, userID, paymentMethodID string) error {
 	// Unset all defaults
 	if err := r.db.WithContext(ctx).
 		Model(&billing.PaymentMethod{}).
-		Where("customer_id = ?", customerID).
+		Where("user_id = ?", userID).
 		Update("is_default", false).Error; err != nil {
 		return err
 	}
 	// Set new default
 	return r.db.WithContext(ctx).
 		Model(&billing.PaymentMethod{}).
-		Where("id = ? AND customer_id = ?", paymentMethodID, customerID).
+		Where("id = ? AND user_id = ?", paymentMethodID, userID).
 		Update("is_default", true).Error
 }
 
@@ -236,24 +198,24 @@ func (r *BillingRepository) RecordUsage(ctx context.Context, usage *billing.Usag
 	return r.db.WithContext(ctx).Create(usage).Error
 }
 
-func (r *BillingRepository) GetUsageSummary(ctx context.Context, customerID string, periodStart, periodEnd time.Time) (map[string]int64, error) {
+func (r *BillingRepository) GetUsageSummary(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (map[string]int64, error) {
 	type result struct {
-		Metric   string
-		Total    int64
+		Metric string
+		Total  int64
 	}
 	var results []result
-	
+
 	err := r.db.WithContext(ctx).
 		Model(&billing.Usage{}).
 		Select("metric, SUM(quantity) as total").
-		Where("customer_id = ? AND timestamp >= ? AND timestamp < ?", customerID, periodStart, periodEnd).
+		Where("subscription_id = ? AND period_start >= ? AND period_end <= ?", subscriptionID, periodStart, periodEnd).
 		Group("metric").
 		Find(&results).Error
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	summary := make(map[string]int64)
 	for _, r := range results {
 		summary[r.Metric] = r.Total
@@ -261,48 +223,32 @@ func (r *BillingRepository) GetUsageSummary(ctx context.Context, customerID stri
 	return summary, nil
 }
 
-func (r *BillingRepository) GetUsageByMetric(ctx context.Context, customerID, metric string, periodStart, periodEnd time.Time) (int64, error) {
+func (r *BillingRepository) GetUsageByMetric(ctx context.Context, subscriptionID, metric string, periodStart, periodEnd time.Time) (int64, error) {
 	var total int64
 	err := r.db.WithContext(ctx).
 		Model(&billing.Usage{}).
 		Select("COALESCE(SUM(quantity), 0)").
-		Where("customer_id = ? AND metric = ? AND timestamp >= ? AND timestamp < ?", customerID, metric, periodStart, periodEnd).
+		Where("subscription_id = ? AND metric = ? AND period_start >= ? AND period_end <= ?", subscriptionID, metric, periodStart, periodEnd).
 		Scan(&total).Error
 	return total, err
 }
 
-// Credit operations
+// Coupon operations
 
-func (r *BillingRepository) CreateCredit(ctx context.Context, credit *billing.Credit) error {
-	return r.db.WithContext(ctx).Create(credit).Error
-}
-
-func (r *BillingRepository) GetAvailableCredits(ctx context.Context, customerID string) (int64, error) {
-	var total int64
-	err := r.db.WithContext(ctx).
-		Model(&billing.Credit{}).
-		Select("COALESCE(SUM(amount - used_amount), 0)").
-		Where("customer_id = ? AND (expires_at IS NULL OR expires_at > ?)", customerID, time.Now()).
-		Scan(&total).Error
-	return total, err
-}
-
-// PromoCode operations
-
-func (r *BillingRepository) GetPromoCode(ctx context.Context, code string) (*billing.PromoCode, error) {
-	var promo billing.PromoCode
+func (r *BillingRepository) GetCoupon(ctx context.Context, code string) (*billing.Coupon, error) {
+	var coupon billing.Coupon
 	err := r.db.WithContext(ctx).
 		Where("code = ? AND is_active = ?", code, true).
-		First(&promo).Error
+		First(&coupon).Error
 	if err != nil {
 		return nil, err
 	}
-	return &promo, nil
+	return &coupon, nil
 }
 
-func (r *BillingRepository) IncrementPromoRedemptions(ctx context.Context, id string) error {
+func (r *BillingRepository) IncrementCouponRedemptions(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).
-		Model(&billing.PromoCode{}).
+		Model(&billing.Coupon{}).
 		Where("id = ?", id).
-		UpdateColumn("times_redeemed", r.db.Raw("times_redeemed + 1")).Error
+		UpdateColumn("redemption_count", r.db.Raw("redemption_count + 1")).Error
 }

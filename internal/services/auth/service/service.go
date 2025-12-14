@@ -188,7 +188,6 @@ func (s *AuthService) Login(ctx context.Context, email, password, ipAddress, use
 		UserAgent:    userAgent,
 		ExpiresAt:    time.Now().Add(7 * 24 * time.Hour),
 		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
 	}
 
 	if err := s.repository.CreateSession(ctx, session); err != nil {

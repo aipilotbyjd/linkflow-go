@@ -31,7 +31,7 @@ type APIKey struct {
 
 // TableName returns the table name for GORM
 func (APIKey) TableName() string {
-	return "api_keys"
+	return "auth.api_keys"
 }
 
 // IsExpired checks if the API key has expired

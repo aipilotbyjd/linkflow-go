@@ -68,7 +68,5 @@ func (r *GormAPIKeyRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Delete(&APIKey{}, "id = ?", id).Error
 }
 
-// Migrate runs database migrations for API keys
-func (r *GormAPIKeyRepository) Migrate() error {
-	return r.db.AutoMigrate(&APIKey{})
-}
+// Note: Database migrations are handled via SQL migration files in /migrations
+// The api_keys table is created by migration 000002_auth_tables.up.sql

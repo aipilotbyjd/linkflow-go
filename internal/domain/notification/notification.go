@@ -15,53 +15,68 @@ var (
 // Channel represents a notification channel
 type Channel struct {
 	ID         string            `json:"id" gorm:"primaryKey"`
-	UserID     string            `json:"userId" gorm:"not null;index"`
+	UserID     string            `json:"userId" gorm:"column:user_id;not null;index"`
 	Type       string            `json:"type" gorm:"not null"`
 	Name       string            `json:"name" gorm:"not null"`
 	Config     map[string]string `json:"config" gorm:"serializer:json"`
-	IsActive   bool              `json:"isActive" gorm:"default:true"`
-	IsVerified bool              `json:"isVerified" gorm:"default:false"`
-	VerifiedAt *time.Time        `json:"verifiedAt"`
-	CreatedAt  time.Time         `json:"createdAt"`
-	UpdatedAt  time.Time         `json:"updatedAt"`
+	IsActive   bool              `json:"isActive" gorm:"column:is_active;default:true"`
+	IsVerified bool              `json:"isVerified" gorm:"column:is_verified;default:false"`
+	VerifiedAt *time.Time        `json:"verifiedAt" gorm:"column:verified_at"`
+	CreatedAt  time.Time         `json:"createdAt" gorm:"column:created_at"`
+	UpdatedAt  time.Time         `json:"updatedAt" gorm:"column:updated_at"`
+}
+
+// TableName specifies the table name for GORM
+func (Channel) TableName() string {
+	return "notification.channels"
 }
 
 // Preferences represents user notification preferences
 type Preferences struct {
 	ID               string    `json:"id" gorm:"primaryKey"`
-	UserID           string    `json:"userId" gorm:"uniqueIndex;not null"`
-	EmailEnabled     bool      `json:"emailEnabled" gorm:"default:true"`
-	PushEnabled      bool      `json:"pushEnabled" gorm:"default:true"`
-	SlackEnabled     bool      `json:"slackEnabled" gorm:"default:false"`
-	WebhookEnabled   bool      `json:"webhookEnabled" gorm:"default:false"`
-	ExecutionSuccess bool      `json:"executionSuccess" gorm:"default:false"`
-	ExecutionFailure bool      `json:"executionFailure" gorm:"default:true"`
-	WorkflowShared   bool      `json:"workflowShared" gorm:"default:true"`
-	TeamInvite       bool      `json:"teamInvite" gorm:"default:true"`
-	BillingAlerts    bool      `json:"billingAlerts" gorm:"default:true"`
-	WeeklyDigest     bool      `json:"weeklyDigest" gorm:"default:true"`
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	UserID           string    `json:"userId" gorm:"column:user_id;uniqueIndex;not null"`
+	EmailEnabled     bool      `json:"emailEnabled" gorm:"column:email_enabled;default:true"`
+	PushEnabled      bool      `json:"pushEnabled" gorm:"column:push_enabled;default:true"`
+	SlackEnabled     bool      `json:"slackEnabled" gorm:"column:slack_enabled;default:false"`
+	WebhookEnabled   bool      `json:"webhookEnabled" gorm:"column:webhook_enabled;default:false"`
+	ExecutionSuccess bool      `json:"executionSuccess" gorm:"column:execution_success;default:false"`
+	ExecutionFailure bool      `json:"executionFailure" gorm:"column:execution_failure;default:true"`
+	WorkflowShared   bool      `json:"workflowShared" gorm:"column:workflow_shared;default:true"`
+	TeamInvite       bool      `json:"teamInvite" gorm:"column:team_invite;default:true"`
+	BillingAlerts    bool      `json:"billingAlerts" gorm:"column:billing_alerts;default:true"`
+	WeeklyDigest     bool      `json:"weeklyDigest" gorm:"column:weekly_digest;default:true"`
+	CreatedAt        time.Time `json:"createdAt" gorm:"column:created_at"`
+	UpdatedAt        time.Time `json:"updatedAt" gorm:"column:updated_at"`
+}
+
+// TableName specifies the table name for GORM
+func (Preferences) TableName() string {
+	return "notification.preferences"
 }
 
 // Notification represents a notification message
 type Notification struct {
 	ID          string                 `json:"id" gorm:"primaryKey"`
-	UserID      string                 `json:"userId" gorm:"not null;index"`
-	ChannelID   string                 `json:"channelId" gorm:"index"`
+	UserID      string                 `json:"userId" gorm:"column:user_id;not null;index"`
+	ChannelID   string                 `json:"channelId" gorm:"column:channel_id;index"`
 	Type        string                 `json:"type" gorm:"not null"`
 	Priority    string                 `json:"priority" gorm:"default:'normal'"`
 	Subject     string                 `json:"subject"`
 	Body        string                 `json:"body" gorm:"not null"`
 	Data        map[string]interface{} `json:"data" gorm:"serializer:json"`
 	Status      string                 `json:"status" gorm:"default:'pending'"`
-	Attempts    int                    `json:"attempts" gorm:"default:0"`
-	MaxAttempts int                    `json:"maxAttempts" gorm:"default:3"`
-	ScheduledAt *time.Time             `json:"scheduledAt"`
-	SentAt      *time.Time             `json:"sentAt"`
-	ReadAt      *time.Time             `json:"readAt"`
-	Error       string                 `json:"error"`
-	CreatedAt   time.Time              `json:"createdAt"`
+	Attempts    int                    `json:"attempts" gorm:"column:retry_count;default:0"`
+	MaxAttempts int                    `json:"maxAttempts" gorm:"column:max_retries;default:3"`
+	ScheduledAt *time.Time             `json:"scheduledAt" gorm:"column:scheduled_at"`
+	SentAt      *time.Time             `json:"sentAt" gorm:"column:sent_at"`
+	ReadAt      *time.Time             `json:"readAt" gorm:"column:read_at"`
+	Error       string                 `json:"error" gorm:"column:error_message"`
+	CreatedAt   time.Time              `json:"createdAt" gorm:"column:created_at"`
+}
+
+// TableName specifies the table name for GORM
+func (Notification) TableName() string {
+	return "notification.notifications"
 }
 
 // Channel types

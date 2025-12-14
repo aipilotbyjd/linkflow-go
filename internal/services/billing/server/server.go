@@ -1,22 +1,21 @@
 package server
 
 import (
-	"context"
-	"fmt"
-	"net/http"
-	"time"
+"context"
+"fmt"
+"net/http"
+"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/linkflow-go/internal/services/billing/handlers"
-	"github.com/linkflow-go/internal/services/billing/repository"
-	"github.com/linkflow-go/internal/services/billing/service"
-	"github.com/linkflow-go/internal/services/billing/stripe"
-	"github.com/linkflow-go/pkg/config"
-	"github.com/linkflow-go/pkg/database"
-	"github.com/linkflow-go/pkg/events"
-	"github.com/linkflow-go/pkg/logger"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/redis/go-redis/v9"
+"github.com/gin-gonic/gin"
+"github.com/linkflow-go/internal/services/billing/handlers"
+"github.com/linkflow-go/internal/services/billing/repository"
+"github.com/linkflow-go/internal/services/billing/service"
+"github.com/linkflow-go/pkg/config"
+"github.com/linkflow-go/pkg/database"
+"github.com/linkflow-go/pkg/events"
+"github.com/linkflow-go/pkg/logger"
+"github.com/prometheus/client_golang/prometheus/promhttp"
+"github.com/redis/go-redis/v9"
 )
 
 type Server struct {
@@ -29,13 +28,11 @@ type Server struct {
 }
 
 func New(cfg *config.Config, log logger.Logger) (*Server, error) {
-	// Initialize database
 	db, err := database.New(cfg.Database.ToDatabaseConfig())
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	// Initialize Redis
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     cfg.Redis.Addr(),
 		Password: cfg.Redis.Password,
@@ -43,33 +40,19 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 		PoolSize: cfg.Redis.PoolSize,
 	})
 
-	// Test Redis connection
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
 		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
 	}
 
-	// Initialize event bus
 	eventBus, err := events.NewKafkaEventBus(cfg.Kafka.ToKafkaConfig())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create event bus: %w", err)
 	}
 
-	// Initialize Stripe client
-	// TODO: Get Stripe keys from config
-	stripeSecretKey := "sk_test_placeholder"
-	stripeWebhookSecret := "whsec_placeholder"
-	stripeClient := stripe.NewClient(stripeSecretKey, stripeWebhookSecret)
-
-	// Initialize repository
 	billingRepo := repository.NewBillingRepository(db)
-
-	// Initialize service
-	billingService := service.NewBillingService(billingRepo, stripeClient, eventBus, redisClient, log)
-
-	// Initialize handlers
+	billingService := service.NewBillingService(billingRepo, eventBus, redisClient, log)
 	billingHandlers := handlers.NewBillingHandlers(billingService, log)
 
-	// Setup HTTP server
 	router := setupRouter(billingHandlers, log)
 
 	httpServer := &http.Server{
@@ -77,11 +60,6 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 		Handler:      router,
 		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
-	}
-
-	// Subscribe to events for billing
-	if err := subscribeToEvents(eventBus, billingService); err != nil {
-		return nil, fmt.Errorf("failed to subscribe to events: %w", err)
 	}
 
 	return &Server{
@@ -96,94 +74,27 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 
 func setupRouter(h *handlers.BillingHandlers, log logger.Logger) *gin.Engine {
 	router := gin.New()
-
-	// Middleware
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
 	router.Use(loggingMiddleware(log))
 
-	// Health checks
 	router.GET("/health/live", h.Health)
 	router.GET("/health/ready", h.Ready)
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	// Webhook endpoints (no auth)
-	router.POST("/webhooks/stripe", h.HandleStripeWebhook)
-
-	// API routes
 	v1 := router.Group("/api/v1/billing")
 	{
-		// Subscription management
 		v1.GET("/subscriptions", h.GetSubscriptions)
 		v1.GET("/subscriptions/:id", h.GetSubscription)
-		v1.POST("/subscriptions", h.CreateSubscription)
-		v1.PUT("/subscriptions/:id", h.UpdateSubscription)
-		v1.DELETE("/subscriptions/:id", h.CancelSubscription)
-		v1.POST("/subscriptions/:id/reactivate", h.ReactivateSubscription)
-
-		// Plans
 		v1.GET("/plans", h.ListPlans)
 		v1.GET("/plans/:id", h.GetPlan)
-		v1.POST("/plans", h.CreatePlan)
-		v1.PUT("/plans/:id", h.UpdatePlan)
-		v1.DELETE("/plans/:id", h.DeletePlan)
-
-		// Payment methods
 		v1.GET("/payment-methods", h.ListPaymentMethods)
-		v1.POST("/payment-methods", h.AddPaymentMethod)
-		v1.DELETE("/payment-methods/:id", h.RemovePaymentMethod)
-		v1.POST("/payment-methods/:id/default", h.SetDefaultPaymentMethod)
-
-		// Invoices
 		v1.GET("/invoices", h.ListInvoices)
 		v1.GET("/invoices/:id", h.GetInvoice)
-		v1.GET("/invoices/:id/download", h.DownloadInvoice)
-		v1.POST("/invoices/:id/pay", h.PayInvoice)
-
-		// Usage and metering
-		v1.GET("/usage", h.GetUsage)
-		v1.POST("/usage/report", h.ReportUsage)
-		v1.GET("/usage/summary", h.GetUsageSummary)
-
-		// Billing info
-		v1.GET("/info", h.GetBillingInfo)
-		v1.PUT("/info", h.UpdateBillingInfo)
-
-		// Credits and promotions
-		v1.GET("/credits", h.GetCredits)
-		v1.POST("/credits/apply", h.ApplyPromoCode)
-		v1.GET("/promotions", h.GetAvailablePromotions)
-
-		// Billing portal
-		v1.POST("/portal/session", h.CreatePortalSession)
-
-		// Reports
-		v1.GET("/reports/revenue", h.GetRevenueReport)
-		v1.GET("/reports/churn", h.GetChurnReport)
-		v1.GET("/reports/mrr", h.GetMRRReport)
+		v1.GET("/coupons/:code", h.GetCoupon)
 	}
 
 	return router
-}
-
-func subscribeToEvents(eventBus events.EventBus, service *service.BillingService) error {
-	// Subscribe to events that affect billing
-	events := []string{
-		"user.registered",
-		"user.deleted",
-		"execution.completed",
-		"workflow.created",
-		"storage.used",
-		"subscription.trial_ending",
-	}
-
-	for _, event := range events {
-		if err := eventBus.Subscribe(event, service.HandleBillingEvent); err != nil {
-			return fmt.Errorf("failed to subscribe to %s: %w", event, err)
-		}
-	}
-
-	return nil
 }
 
 func (s *Server) Start() error {
@@ -197,22 +108,18 @@ func (s *Server) Start() error {
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down server...")
 
-	// Shutdown HTTP server
 	if err := s.httpServer.Shutdown(ctx); err != nil {
 		return fmt.Errorf("failed to shutdown HTTP server: %w", err)
 	}
 
-	// Close event bus
 	if err := s.eventBus.Close(); err != nil {
 		s.logger.Error("Failed to close event bus", "error", err)
 	}
 
-	// Close Redis
 	if err := s.redis.Close(); err != nil {
 		s.logger.Error("Failed to close Redis", "error", err)
 	}
 
-	// Close database
 	if err := s.db.Close(); err != nil {
 		s.logger.Error("Failed to close database", "error", err)
 	}
@@ -220,7 +127,6 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// Middleware functions
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
@@ -255,11 +161,11 @@ func loggingMiddleware(log logger.Logger) gin.HandlerFunc {
 		}
 
 		log.Info("HTTP Request",
-			"method", method,
-			"path", path,
-			"status", statusCode,
-			"latency", latency,
-			"ip", clientIP,
-		)
+"method", method,
+"path", path,
+"status", statusCode,
+"latency", latency,
+"ip", clientIP,
+)
 	}
 }

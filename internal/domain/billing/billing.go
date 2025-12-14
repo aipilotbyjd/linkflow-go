@@ -9,14 +9,13 @@ import (
 
 // Errors
 var (
-	ErrSubscriptionNotFound   = errors.New("subscription not found")
-	ErrPlanNotFound           = errors.New("plan not found")
-	ErrInvoiceNotFound        = errors.New("invoice not found")
-	ErrPaymentMethodNotFound  = errors.New("payment method not found")
-	ErrCustomerNotFound       = errors.New("customer not found")
-	ErrInvalidPlan            = errors.New("invalid plan")
-	ErrSubscriptionCancelled  = errors.New("subscription is cancelled")
-	ErrPaymentFailed          = errors.New("payment failed")
+	ErrSubscriptionNotFound  = errors.New("subscription not found")
+	ErrPlanNotFound          = errors.New("plan not found")
+	ErrInvoiceNotFound       = errors.New("invoice not found")
+	ErrPaymentMethodNotFound = errors.New("payment method not found")
+	ErrInvalidPlan           = errors.New("invalid plan")
+	ErrSubscriptionCancelled = errors.New("subscription is cancelled")
+	ErrPaymentFailed         = errors.New("payment failed")
 )
 
 // Subscription statuses
@@ -36,112 +35,99 @@ const (
 
 // Invoice statuses
 const (
-	InvoiceStatusDraft     = "draft"
-	InvoiceStatusOpen      = "open"
-	InvoiceStatusPaid      = "paid"
-	InvoiceStatusVoid      = "void"
+	InvoiceStatusDraft         = "draft"
+	InvoiceStatusOpen          = "open"
+	InvoiceStatusPaid          = "paid"
+	InvoiceStatusVoid          = "void"
 	InvoiceStatusUncollectible = "uncollectible"
 )
 
-// Customer represents a billing customer
-type Customer struct {
-	ID              string     `json:"id" gorm:"primaryKey"`
-	UserID          string     `json:"userId" gorm:"uniqueIndex;not null"`
-	StripeID        string     `json:"stripeId" gorm:"uniqueIndex"`
-	Email           string     `json:"email" gorm:"not null"`
-	Name            string     `json:"name"`
-	DefaultPaymentID string    `json:"defaultPaymentId"`
-	Balance         int64      `json:"balance"` // in cents
-	Currency        string     `json:"currency" gorm:"default:'usd'"`
-	Metadata        map[string]string `json:"metadata" gorm:"serializer:json"`
-	CreatedAt       time.Time  `json:"createdAt"`
-	UpdatedAt       time.Time  `json:"updatedAt"`
-}
-
-func NewCustomer(userID, email string) *Customer {
-	return &Customer{
-		ID:        uuid.New().String(),
-		UserID:    userID,
-		Email:     email,
-		Currency:  "usd",
-		Metadata:  make(map[string]string),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-}
-
 // Plan represents a subscription plan
 type Plan struct {
-	ID           string    `json:"id" gorm:"primaryKey"`
-	StripeID     string    `json:"stripeId" gorm:"uniqueIndex"`
-	Name         string    `json:"name" gorm:"not null"`
-	Description  string    `json:"description"`
-	Interval     string    `json:"interval" gorm:"not null"` // monthly, yearly
-	Price        int64     `json:"price" gorm:"not null"`    // in cents
-	Currency     string    `json:"currency" gorm:"default:'usd'"`
-	Features     []string  `json:"features" gorm:"serializer:json"`
-	Limits       PlanLimits `json:"limits" gorm:"serializer:json"`
-	IsActive     bool      `json:"isActive" gorm:"default:true"`
-	TrialDays    int       `json:"trialDays" gorm:"default:0"`
-	Metadata     map[string]string `json:"metadata" gorm:"serializer:json"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ID              string                 `json:"id" gorm:"primaryKey"`
+	Name            string                 `json:"name" gorm:"not null"`
+	Slug            string                 `json:"slug" gorm:"uniqueIndex;not null"`
+	Description     string                 `json:"description"`
+	PriceMonthly    float64                `json:"priceMonthly" gorm:"column:price_monthly"`
+	PriceYearly     float64                `json:"priceYearly" gorm:"column:price_yearly"`
+	Currency        string                 `json:"currency" gorm:"default:'USD'"`
+	Features        map[string]interface{} `json:"features" gorm:"serializer:json"`
+	IsActive        bool                   `json:"isActive" gorm:"column:is_active;default:true"`
+	IsPublic        bool                   `json:"isPublic" gorm:"column:is_public;default:true"`
+	SortOrder       int                    `json:"sortOrder" gorm:"column:sort_order;default:0"`
+	MaxWorkflows    int                    `json:"maxWorkflows" gorm:"column:max_workflows"`
+	MaxExecutions   int                    `json:"maxExecutions" gorm:"column:max_executions_month"`
+	MaxTeamMembers  int                    `json:"maxTeamMembers" gorm:"column:max_team_members"`
+	MaxStorageBytes int64                  `json:"maxStorageBytes" gorm:"column:max_storage_bytes"`
+	CreatedAt       time.Time              `json:"createdAt" gorm:"column:created_at"`
+	UpdatedAt       time.Time              `json:"updatedAt" gorm:"column:updated_at"`
+}
+
+// TableName specifies the table name for GORM
+func (Plan) TableName() string {
+	return "billing.plans"
 }
 
 type PlanLimits struct {
-	Workflows      int   `json:"workflows"`      // -1 for unlimited
-	Executions     int   `json:"executions"`     // per month
-	TeamMembers    int   `json:"teamMembers"`
-	StorageGB      int   `json:"storageGb"`
-	APIRequests    int   `json:"apiRequests"`    // per month
-	WebhooksPerDay int   `json:"webhooksPerDay"`
+	Workflows      int `json:"workflows"`  // -1 for unlimited
+	Executions     int `json:"executions"` // per month
+	TeamMembers    int `json:"teamMembers"`
+	StorageGB      int `json:"storageGb"`
+	APIRequests    int `json:"apiRequests"` // per month
+	WebhooksPerDay int `json:"webhooksPerDay"`
 }
 
-func NewPlan(name string, interval string, price int64) *Plan {
+func NewPlan(name, slug string, priceMonthly float64) *Plan {
 	return &Plan{
-		ID:        uuid.New().String(),
-		Name:      name,
-		Interval:  interval,
-		Price:     price,
-		Currency:  "usd",
-		Features:  []string{},
-		IsActive:  true,
-		Metadata:  make(map[string]string),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:           uuid.New().String(),
+		Name:         name,
+		Slug:         slug,
+		PriceMonthly: priceMonthly,
+		Currency:     "USD",
+		Features:     make(map[string]interface{}),
+		IsActive:     true,
+		IsPublic:     true,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
 	}
 }
 
 // Subscription represents a customer subscription
 type Subscription struct {
-	ID                   string     `json:"id" gorm:"primaryKey"`
-	StripeID             string     `json:"stripeId" gorm:"uniqueIndex"`
-	CustomerID           string     `json:"customerId" gorm:"not null;index"`
-	PlanID               string     `json:"planId" gorm:"not null;index"`
-	Status               string     `json:"status" gorm:"not null"`
-	CurrentPeriodStart   time.Time  `json:"currentPeriodStart"`
-	CurrentPeriodEnd     time.Time  `json:"currentPeriodEnd"`
-	TrialStart           *time.Time `json:"trialStart"`
-	TrialEnd             *time.Time `json:"trialEnd"`
-	CancelledAt          *time.Time `json:"cancelledAt"`
-	CancelAtPeriodEnd    bool       `json:"cancelAtPeriodEnd"`
-	Quantity             int        `json:"quantity" gorm:"default:1"`
-	Metadata             map[string]string `json:"metadata" gorm:"serializer:json"`
-	CreatedAt            time.Time  `json:"createdAt"`
-	UpdatedAt            time.Time  `json:"updatedAt"`
+	ID                     string                 `json:"id" gorm:"primaryKey"`
+	UserID                 string                 `json:"userId" gorm:"column:user_id;not null;index"`
+	TeamID                 *string                `json:"teamId" gorm:"column:team_id;index"`
+	PlanID                 string                 `json:"planId" gorm:"column:plan_id;not null;index"`
+	Status                 string                 `json:"status" gorm:"not null"`
+	BillingCycle           string                 `json:"billingCycle" gorm:"column:billing_cycle;default:'monthly'"`
+	CurrentPeriodStart     time.Time              `json:"currentPeriodStart" gorm:"column:current_period_start"`
+	CurrentPeriodEnd       time.Time              `json:"currentPeriodEnd" gorm:"column:current_period_end"`
+	TrialEndsAt            *time.Time             `json:"trialEndsAt" gorm:"column:trial_ends_at"`
+	CanceledAt             *time.Time             `json:"canceledAt" gorm:"column:canceled_at"`
+	Provider               string                 `json:"provider"`
+	ProviderSubscriptionID string                 `json:"providerSubscriptionId" gorm:"column:provider_subscription_id"`
+	ProviderCustomerID     string                 `json:"providerCustomerId" gorm:"column:provider_customer_id"`
+	Metadata               map[string]interface{} `json:"metadata" gorm:"serializer:json"`
+	CreatedAt              time.Time              `json:"createdAt" gorm:"column:created_at"`
+	UpdatedAt              time.Time              `json:"updatedAt" gorm:"column:updated_at"`
 }
 
-func NewSubscription(customerID, planID string) *Subscription {
+// TableName specifies the table name for GORM
+func (Subscription) TableName() string {
+	return "billing.subscriptions"
+}
+
+func NewSubscription(userID, planID string) *Subscription {
 	now := time.Now()
 	return &Subscription{
 		ID:                 uuid.New().String(),
-		CustomerID:         customerID,
+		UserID:             userID,
 		PlanID:             planID,
 		Status:             SubscriptionStatusActive,
+		BillingCycle:       IntervalMonthly,
 		CurrentPeriodStart: now,
 		CurrentPeriodEnd:   now.AddDate(0, 1, 0),
-		Quantity:           1,
-		Metadata:           make(map[string]string),
+		Metadata:           make(map[string]interface{}),
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
@@ -153,148 +139,128 @@ func (s *Subscription) IsActive() bool {
 
 func (s *Subscription) Cancel(atPeriodEnd bool) {
 	now := time.Now()
-	if atPeriodEnd {
-		s.CancelAtPeriodEnd = true
-	} else {
+	if !atPeriodEnd {
 		s.Status = SubscriptionStatusCancelled
-		s.CancelledAt = &now
+		s.CanceledAt = &now
 	}
 	s.UpdatedAt = now
 }
 
 // Invoice represents a billing invoice
 type Invoice struct {
-	ID             string       `json:"id" gorm:"primaryKey"`
-	StripeID       string       `json:"stripeId" gorm:"uniqueIndex"`
-	CustomerID     string       `json:"customerId" gorm:"not null;index"`
-	SubscriptionID string       `json:"subscriptionId" gorm:"index"`
-	Number         string       `json:"number"`
-	Status         string       `json:"status" gorm:"not null"`
-	Currency       string       `json:"currency" gorm:"default:'usd'"`
-	Subtotal       int64        `json:"subtotal"`
-	Tax            int64        `json:"tax"`
-	Total          int64        `json:"total"`
-	AmountPaid     int64        `json:"amountPaid"`
-	AmountDue      int64        `json:"amountDue"`
-	Lines          []InvoiceLine `json:"lines" gorm:"serializer:json"`
-	PeriodStart    time.Time    `json:"periodStart"`
-	PeriodEnd      time.Time    `json:"periodEnd"`
-	DueDate        *time.Time   `json:"dueDate"`
-	PaidAt         *time.Time   `json:"paidAt"`
-	HostedURL      string       `json:"hostedUrl"`
-	PDFURL         string       `json:"pdfUrl"`
-	CreatedAt      time.Time    `json:"createdAt"`
-	UpdatedAt      time.Time    `json:"updatedAt"`
+	ID                string        `json:"id" gorm:"primaryKey"`
+	SubscriptionID    string        `json:"subscriptionId" gorm:"column:subscription_id;not null;index"`
+	UserID            string        `json:"userId" gorm:"column:user_id;not null;index"`
+	InvoiceNumber     string        `json:"invoiceNumber" gorm:"column:invoice_number;uniqueIndex;not null"`
+	Status            string        `json:"status" gorm:"not null"`
+	Currency          string        `json:"currency" gorm:"default:'USD'"`
+	Subtotal          float64       `json:"subtotal"`
+	Tax               float64       `json:"tax"`
+	Discount          float64       `json:"discount"`
+	Total             float64       `json:"total"`
+	LineItems         []InvoiceLine `json:"lineItems" gorm:"column:line_items;serializer:json"`
+	DueDate           *time.Time    `json:"dueDate" gorm:"column:due_date"`
+	PaidAt            *time.Time    `json:"paidAt" gorm:"column:paid_at"`
+	ProviderInvoiceID string        `json:"providerInvoiceId" gorm:"column:provider_invoice_id"`
+	PDFURL            string        `json:"pdfUrl" gorm:"column:pdf_url"`
+	CreatedAt         time.Time     `json:"createdAt" gorm:"column:created_at"`
+	UpdatedAt         time.Time     `json:"updatedAt" gorm:"column:updated_at"`
+}
+
+// TableName specifies the table name for GORM
+func (Invoice) TableName() string {
+	return "billing.invoices"
 }
 
 type InvoiceLine struct {
-	Description string `json:"description"`
-	Quantity    int    `json:"quantity"`
-	UnitAmount  int64  `json:"unitAmount"`
-	Amount      int64  `json:"amount"`
+	Description string  `json:"description"`
+	Quantity    int     `json:"quantity"`
+	UnitAmount  float64 `json:"unitAmount"`
+	Amount      float64 `json:"amount"`
 }
 
-func NewInvoice(customerID string, total int64) *Invoice {
+func NewInvoice(subscriptionID, userID string, total float64) *Invoice {
 	return &Invoice{
-		ID:         uuid.New().String(),
-		CustomerID: customerID,
-		Status:     InvoiceStatusDraft,
-		Currency:   "usd",
-		Total:      total,
-		AmountDue:  total,
-		Lines:      []InvoiceLine{},
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
+		ID:             uuid.New().String(),
+		SubscriptionID: subscriptionID,
+		UserID:         userID,
+		Status:         InvoiceStatusDraft,
+		Currency:       "USD",
+		Total:          total,
+		LineItems:      []InvoiceLine{},
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 }
 
 // PaymentMethod represents a customer payment method
 type PaymentMethod struct {
-	ID           string    `json:"id" gorm:"primaryKey"`
-	StripeID     string    `json:"stripeId" gorm:"uniqueIndex"`
-	CustomerID   string    `json:"customerId" gorm:"not null;index"`
-	Type         string    `json:"type" gorm:"not null"` // card, bank_account
-	IsDefault    bool      `json:"isDefault" gorm:"default:false"`
-	Card         *CardInfo `json:"card" gorm:"serializer:json"`
-	BillingDetails BillingDetails `json:"billingDetails" gorm:"serializer:json"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ID               string    `json:"id" gorm:"primaryKey"`
+	UserID           string    `json:"userId" gorm:"column:user_id;not null;index"`
+	Type             string    `json:"type" gorm:"not null"` // card, bank_account, paypal
+	CardBrand        string    `json:"cardBrand" gorm:"column:card_brand"`
+	CardLast4        string    `json:"cardLast4" gorm:"column:card_last4"`
+	CardExpMonth     int       `json:"cardExpMonth" gorm:"column:card_exp_month"`
+	CardExpYear      int       `json:"cardExpYear" gorm:"column:card_exp_year"`
+	IsDefault        bool      `json:"isDefault" gorm:"column:is_default;default:false"`
+	Provider         string    `json:"provider"`
+	ProviderMethodID string    `json:"providerMethodId" gorm:"column:provider_method_id"`
+	CreatedAt        time.Time `json:"createdAt" gorm:"column:created_at"`
+	UpdatedAt        time.Time `json:"updatedAt" gorm:"column:updated_at"`
 }
 
-type CardInfo struct {
-	Brand       string `json:"brand"`    // visa, mastercard, amex
-	Last4       string `json:"last4"`
-	ExpMonth    int    `json:"expMonth"`
-	ExpYear     int    `json:"expYear"`
-	Funding     string `json:"funding"`  // credit, debit
-	Country     string `json:"country"`
-}
-
-type BillingDetails struct {
-	Name    string  `json:"name"`
-	Email   string  `json:"email"`
-	Phone   string  `json:"phone"`
-	Address Address `json:"address"`
-}
-
-type Address struct {
-	Line1      string `json:"line1"`
-	Line2      string `json:"line2"`
-	City       string `json:"city"`
-	State      string `json:"state"`
-	PostalCode string `json:"postalCode"`
-	Country    string `json:"country"`
+// TableName specifies the table name for GORM
+func (PaymentMethod) TableName() string {
+	return "billing.payment_methods"
 }
 
 // Usage represents usage tracking for metered billing
 type Usage struct {
-	ID             string    `json:"id" gorm:"primaryKey"`
-	CustomerID     string    `json:"customerId" gorm:"not null;index"`
-	SubscriptionID string    `json:"subscriptionId" gorm:"index"`
-	Metric         string    `json:"metric" gorm:"not null;index"` // executions, api_calls, storage
-	Quantity       int64     `json:"quantity"`
-	Timestamp      time.Time `json:"timestamp" gorm:"index"`
-	PeriodStart    time.Time `json:"periodStart"`
-	PeriodEnd      time.Time `json:"periodEnd"`
-	CreatedAt      time.Time `json:"createdAt"`
+	ID             string                 `json:"id" gorm:"primaryKey"`
+	SubscriptionID string                 `json:"subscriptionId" gorm:"column:subscription_id;not null;index"`
+	Metric         string                 `json:"metric" gorm:"not null;index"` // executions, api_calls, storage
+	Quantity       int64                  `json:"quantity"`
+	PeriodStart    time.Time              `json:"periodStart" gorm:"column:period_start"`
+	PeriodEnd      time.Time              `json:"periodEnd" gorm:"column:period_end"`
+	Metadata       map[string]interface{} `json:"metadata" gorm:"serializer:json"`
+	CreatedAt      time.Time              `json:"createdAt" gorm:"column:created_at"`
 }
 
-func NewUsage(customerID, metric string, quantity int64) *Usage {
+// TableName specifies the table name for GORM
+func (Usage) TableName() string {
+	return "billing.usage_records"
+}
+
+func NewUsage(subscriptionID, metric string, quantity int64) *Usage {
 	now := time.Now()
 	return &Usage{
-		ID:          uuid.New().String(),
-		CustomerID:  customerID,
-		Metric:      metric,
-		Quantity:    quantity,
-		Timestamp:   now,
-		PeriodStart: time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()),
-		PeriodEnd:   time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location()),
-		CreatedAt:   now,
+		ID:             uuid.New().String(),
+		SubscriptionID: subscriptionID,
+		Metric:         metric,
+		Quantity:       quantity,
+		PeriodStart:    time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()),
+		PeriodEnd:      time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location()),
+		CreatedAt:      now,
 	}
 }
 
-// Credit represents account credits
-type Credit struct {
-	ID          string    `json:"id" gorm:"primaryKey"`
-	CustomerID  string    `json:"customerId" gorm:"not null;index"`
-	Amount      int64     `json:"amount"` // in cents
-	Description string    `json:"description"`
-	ExpiresAt   *time.Time `json:"expiresAt"`
-	UsedAmount  int64     `json:"usedAmount"`
-	CreatedAt   time.Time `json:"createdAt"`
+// Coupon represents a promotional coupon
+type Coupon struct {
+	ID              string     `json:"id" gorm:"primaryKey"`
+	Code            string     `json:"code" gorm:"uniqueIndex;not null"`
+	Name            string     `json:"name"`
+	DiscountType    string     `json:"discountType" gorm:"column:discount_type"` // percent, fixed
+	DiscountValue   float64    `json:"discountValue" gorm:"column:discount_value"`
+	Currency        string     `json:"currency" gorm:"default:'USD'"`
+	MaxRedemptions  *int       `json:"maxRedemptions" gorm:"column:max_redemptions"`
+	RedemptionCount int        `json:"redemptionCount" gorm:"column:redemption_count;default:0"`
+	ValidFrom       time.Time  `json:"validFrom" gorm:"column:valid_from"`
+	ValidUntil      *time.Time `json:"validUntil" gorm:"column:valid_until"`
+	IsActive        bool       `json:"isActive" gorm:"column:is_active;default:true"`
+	CreatedAt       time.Time  `json:"createdAt" gorm:"column:created_at"`
 }
 
-// PromoCode represents a promotional code
-type PromoCode struct {
-	ID              string    `json:"id" gorm:"primaryKey"`
-	Code            string    `json:"code" gorm:"uniqueIndex;not null"`
-	DiscountType    string    `json:"discountType"` // percentage, fixed
-	DiscountAmount  int64     `json:"discountAmount"`
-	MaxRedemptions  int       `json:"maxRedemptions"`
-	TimesRedeemed   int       `json:"timesRedeemed"`
-	ValidFrom       time.Time `json:"validFrom"`
-	ValidUntil      *time.Time `json:"validUntil"`
-	IsActive        bool      `json:"isActive" gorm:"default:true"`
-	ApplicablePlans []string  `json:"applicablePlans" gorm:"serializer:json"`
-	CreatedAt       time.Time `json:"createdAt"`
+// TableName specifies the table name for GORM
+func (Coupon) TableName() string {
+	return "billing.coupons"
 }

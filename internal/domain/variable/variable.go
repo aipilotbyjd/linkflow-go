@@ -10,10 +10,10 @@ import (
 
 // Variable types
 const (
-	TypeString = "string"
-	TypeNumber = "number"
+	TypeString  = "string"
+	TypeNumber  = "number"
 	TypeBoolean = "boolean"
-	TypeSecret = "secret"
+	TypeSecret  = "secret"
 )
 
 var (
@@ -30,8 +30,13 @@ type Variable struct {
 	Value       string    `json:"value" gorm:"not null"` // Stored encrypted for secrets
 	Type        string    `json:"type" gorm:"not null;default:'string'"`
 	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	CreatedAt   time.Time `json:"createdAt" gorm:"column:created_at"`
+	UpdatedAt   time.Time `json:"updatedAt" gorm:"column:updated_at"`
+}
+
+// TableName specifies the table name for GORM
+func (Variable) TableName() string {
+	return "variable.variables"
 }
 
 // NewVariable creates a new variable
