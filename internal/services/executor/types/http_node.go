@@ -21,26 +21,26 @@ type HTTPNodeExecutor struct {
 
 // HTTPNodeConfig represents configuration for HTTP nodes
 type HTTPNodeConfig struct {
-	Method          string                 `json:"method"`
-	URL             string                 `json:"url"`
-	Headers         map[string]string      `json:"headers"`
-	Body            interface{}            `json:"body"`
-	QueryParams     map[string]string      `json:"queryParams"`
-	Authentication  AuthConfig             `json:"authentication"`
-	Timeout         int                    `json:"timeout"` // in seconds
-	RetryOnFailure  bool                   `json:"retryOnFailure"`
-	MaxRetries      int                    `json:"maxRetries"`
-	FollowRedirects bool                   `json:"followRedirects"`
-	ValidateSSL     bool                   `json:"validateSSL"`
+	Method          string            `json:"method"`
+	URL             string            `json:"url"`
+	Headers         map[string]string `json:"headers"`
+	Body            interface{}       `json:"body"`
+	QueryParams     map[string]string `json:"queryParams"`
+	Authentication  AuthConfig        `json:"authentication"`
+	Timeout         int               `json:"timeout"` // in seconds
+	RetryOnFailure  bool              `json:"retryOnFailure"`
+	MaxRetries      int               `json:"maxRetries"`
+	FollowRedirects bool              `json:"followRedirects"`
+	ValidateSSL     bool              `json:"validateSSL"`
 }
 
 // AuthConfig represents authentication configuration
 type AuthConfig struct {
-	Type        string `json:"type"` // none, basic, bearer, api-key
-	Username    string `json:"username,omitempty"`
-	Password    string `json:"password,omitempty"`
-	Token       string `json:"token,omitempty"`
-	APIKey      string `json:"apiKey,omitempty"`
+	Type         string `json:"type"` // none, basic, bearer, api-key
+	Username     string `json:"username,omitempty"`
+	Password     string `json:"password,omitempty"`
+	Token        string `json:"token,omitempty"`
+	APIKey       string `json:"apiKey,omitempty"`
 	APIKeyHeader string `json:"apiKeyHeader,omitempty"`
 }
 
@@ -62,70 +62,70 @@ func NewHTTPNodeExecutor(logger logger.Logger) *HTTPNodeExecutor {
 
 // Execute executes an HTTP request node
 func (e *HTTPNodeExecutor) Execute(ctx context.Context, node Node, input map[string]interface{}) (map[string]interface{}, error) {
-	config, err := e.parseConfig(node.Config)
+	config, err := e.parseConfig(node.Parameters)
 	if err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
-	
+
 	// Interpolate variables in URL
 	url := e.interpolateVariables(config.URL, input)
-	
+
 	// Build request
 	req, err := e.buildRequest(ctx, config, url, input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request: %w", err)
 	}
-	
+
 	// Execute with retries
 	var resp *http.Response
 	var lastErr error
-	
+
 	maxAttempts := 1
 	if config.RetryOnFailure && config.MaxRetries > 0 {
 		maxAttempts = config.MaxRetries + 1
 	}
-	
+
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if attempt > 0 {
 			// Wait before retry
 			time.Sleep(time.Duration(attempt) * time.Second)
 			e.logger.Info("Retrying HTTP request", "attempt", attempt, "url", url)
 		}
-		
+
 		resp, lastErr = e.client.Do(req)
 		if lastErr == nil && resp.StatusCode < 500 {
 			break // Success or client error (no retry needed)
 		}
-		
+
 		if resp != nil {
 			resp.Body.Close()
 		}
 	}
-	
+
 	if lastErr != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", lastErr)
 	}
 	defer resp.Body.Close()
-	
+
 	// Parse response
 	return e.parseResponse(resp)
 }
 
 // ValidateInput validates the input for the HTTP node
 func (e *HTTPNodeExecutor) ValidateInput(node Node, input map[string]interface{}) error {
-	config, err := e.parseConfig(node.Config)
+	config, err := e.parseConfig(node.Parameters)
 	if err != nil {
 		return err
 	}
-	
+
 	if config.URL == "" {
 		return fmt.Errorf("URL is required")
 	}
-	
+
 	if config.Method == "" {
 		config.Method = "GET"
 	}
-	
+
 	// Validate method
 	validMethods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
 	valid := false
@@ -135,11 +135,11 @@ func (e *HTTPNodeExecutor) ValidateInput(node Node, input map[string]interface{}
 			break
 		}
 	}
-	
+
 	if !valid {
 		return fmt.Errorf("invalid HTTP method: %s", config.Method)
 	}
-	
+
 	return nil
 }
 
@@ -155,25 +155,25 @@ func (e *HTTPNodeExecutor) parseConfig(config interface{}) (*HTTPNodeConfig, err
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var httpConfig HTTPNodeConfig
 	if err := json.Unmarshal(jsonData, &httpConfig); err != nil {
 		return nil, err
 	}
-	
+
 	// Set defaults
 	if httpConfig.Method == "" {
 		httpConfig.Method = "GET"
 	}
-	
+
 	if httpConfig.ValidateSSL == false {
 		httpConfig.ValidateSSL = true
 	}
-	
+
 	if httpConfig.FollowRedirects == false {
 		httpConfig.FollowRedirects = true
 	}
-	
+
 	return &httpConfig, nil
 }
 
@@ -184,30 +184,30 @@ func (e *HTTPNodeExecutor) buildRequest(ctx context.Context, config *HTTPNodeCon
 	if config.Body != nil {
 		// Interpolate variables in body
 		bodyData := e.interpolateInObject(config.Body, input)
-		
+
 		jsonBody, err := json.Marshal(bodyData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal body: %w", err)
 		}
 		body = bytes.NewReader(jsonBody)
 	}
-	
+
 	// Create request
 	req, err := http.NewRequestWithContext(ctx, strings.ToUpper(config.Method), url, body)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Add headers
 	for key, value := range config.Headers {
 		req.Header.Set(key, e.interpolateVariables(value, input))
 	}
-	
+
 	// Set content type if not set and body exists
 	if body != nil && req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	
+
 	// Add query parameters
 	if len(config.QueryParams) > 0 {
 		q := req.URL.Query()
@@ -216,10 +216,10 @@ func (e *HTTPNodeExecutor) buildRequest(ctx context.Context, config *HTTPNodeCon
 		}
 		req.URL.RawQuery = q.Encode()
 	}
-	
+
 	// Add authentication
 	e.addAuthentication(req, config.Authentication)
-	
+
 	return req, nil
 }
 
@@ -246,13 +246,13 @@ func (e *HTTPNodeExecutor) parseResponse(resp *http.Response) (map[string]interf
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
-	
+
 	result := map[string]interface{}{
 		"statusCode": resp.StatusCode,
 		"status":     resp.Status,
 		"headers":    e.headersToMap(resp.Header),
 	}
-	
+
 	// Try to parse as JSON
 	var jsonBody interface{}
 	if err := json.Unmarshal(bodyBytes, &jsonBody); err == nil {
@@ -263,10 +263,10 @@ func (e *HTTPNodeExecutor) parseResponse(resp *http.Response) (map[string]interf
 		result["body"] = string(bodyBytes)
 		result["bodyType"] = "text"
 	}
-	
+
 	// Add success flag
 	result["success"] = resp.StatusCode >= 200 && resp.StatusCode < 300
-	
+
 	return result, nil
 }
 

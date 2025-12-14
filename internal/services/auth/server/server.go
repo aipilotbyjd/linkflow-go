@@ -19,7 +19,7 @@ import (
 	"github.com/linkflow-go/pkg/database"
 	"github.com/linkflow-go/pkg/events"
 	"github.com/linkflow-go/pkg/logger"
-	"github.com/linkflow-go/pkg/middleware/ratelimit"
+	"github.com/linkflow-go/pkg/ratelimit"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 )
@@ -129,12 +129,7 @@ func setupRouter(h *handlers.AuthHandlers, jwtManager *jwt.Manager, redisClient 
 
 	// Create rate limiter for login attempts
 	// Allow 5 attempts per 15 minutes, then block for 15 minutes
-	var loginRateLimiter ratelimit.RateLimiter
-	if redisClient != nil {
-		loginRateLimiter = ratelimit.NewRedisRateLimiter(redisClient, 5, 15*time.Minute)
-	} else {
-		loginRateLimiter = ratelimit.NewInMemoryRateLimiter(5, 15*time.Minute)
-	}
+	loginRateLimiter := ratelimit.NewInMemoryRateLimiter(5, 15*time.Minute)
 
 	// API routes
 	v1 := router.Group("/api/v1/auth")

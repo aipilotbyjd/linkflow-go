@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -60,27 +61,27 @@ func NewRedisRateLimiter(client *redis.Client, limit int, window time.Duration) 
 func (r *RedisRateLimiter) Allow(ctx context.Context, key string) (bool, error) {
 	now := time.Now().Unix()
 	windowStart := now - int64(r.window.Seconds())
-	
+
 	pipe := r.redis.Pipeline()
-	
+
 	// Remove old entries
 	pipe.ZRemRangeByScore(ctx, key, "0", strconv.FormatInt(windowStart, 10))
-	
+
 	// Count current entries
 	countCmd := pipe.ZCard(ctx, key)
-	
+
 	// Execute pipeline
 	if _, err := pipe.Exec(ctx); err != nil {
 		return false, fmt.Errorf("failed to execute pipeline: %w", err)
 	}
-	
+
 	count := countCmd.Val()
-	
+
 	// Check if limit exceeded
 	if count >= int64(r.limit) {
 		return false, nil
 	}
-	
+
 	// Add new entry
 	member := fmt.Sprintf("%d:%s", now, key)
 	if err := r.redis.ZAdd(ctx, key, redis.Z{
@@ -89,10 +90,10 @@ func (r *RedisRateLimiter) Allow(ctx context.Context, key string) (bool, error) 
 	}).Err(); err != nil {
 		return false, fmt.Errorf("failed to add entry: %w", err)
 	}
-	
+
 	// Set expiry
 	r.redis.Expire(ctx, key, r.window)
-	
+
 	return true, nil
 }
 
@@ -123,33 +124,33 @@ func (s *SlidingWindowLimiter) Allow(ctx context.Context, key string) (bool, err
 	now := time.Now()
 	currentWindow := now.Unix() / int64(s.window.Seconds())
 	previousWindow := currentWindow - 1
-	
+
 	currentKey := fmt.Sprintf("%s:%d", key, currentWindow)
 	previousKey := fmt.Sprintf("%s:%d", key, previousWindow)
-	
+
 	// Get counts from both windows
 	pipe := s.redis.Pipeline()
 	currentCountCmd := pipe.Get(ctx, currentKey)
 	previousCountCmd := pipe.Get(ctx, previousKey)
 	pipe.Exec(ctx)
-	
+
 	currentCount, _ := strconv.Atoi(currentCountCmd.Val())
 	previousCount, _ := strconv.Atoi(previousCountCmd.Val())
-	
+
 	// Calculate weighted count
 	windowProgress := float64(now.Unix()%int64(s.window.Seconds())) / s.window.Seconds()
 	weightedCount := float64(previousCount)*(1-windowProgress) + float64(currentCount)
-	
+
 	if weightedCount >= float64(s.limit) {
 		return false, nil
 	}
-	
+
 	// Increment current window counter
 	pipe = s.redis.Pipeline()
 	pipe.Incr(ctx, currentKey)
 	pipe.Expire(ctx, currentKey, s.window*2)
 	pipe.Exec(ctx)
-	
+
 	return true, nil
 }
 
@@ -168,7 +169,7 @@ func Middleware(limiter RateLimiter, keyFunc func(*gin.Context) string) gin.Hand
 		if key == "" {
 			key = c.ClientIP()
 		}
-		
+
 		allowed, err := limiter.Allow(c.Request.Context(), key)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -177,20 +178,20 @@ func Middleware(limiter RateLimiter, keyFunc func(*gin.Context) string) gin.Hand
 			c.Abort()
 			return
 		}
-		
+
 		if !allowed {
 			c.Header("X-RateLimit-Limit", strconv.Itoa(limiter.Burst()))
 			c.Header("X-RateLimit-Remaining", "0")
 			c.Header("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(time.Second).Unix(), 10))
-			
+
 			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error": "Rate limit exceeded",
+				"error":   "Rate limit exceeded",
 				"message": "Too many requests, please try again later",
 			})
 			c.Abort()
 			return
 		}
-		
+
 		c.Next()
 	}
 }
@@ -263,7 +264,7 @@ func (t *TieredRateLimiter) GetLimiter(tier string) RateLimiter {
 	if !exists {
 		config = t.tiers["free"]
 	}
-	
+
 	return NewRedisRateLimiter(t.redis, config.Limit, config.Window)
 }
 
@@ -292,7 +293,7 @@ func (d *DynamicRateLimiter) Allow(ctx context.Context, key string) (bool, error
 	} else {
 		d.adjustRatio = 1.0 // Full limit
 	}
-	
+
 	// Apply adjusted limit
 	if d.adjustRatio < 1.0 {
 		// Use random sampling to achieve fractional rate limiting
@@ -300,7 +301,7 @@ func (d *DynamicRateLimiter) Allow(ctx context.Context, key string) (bool, error
 			return false, nil
 		}
 	}
-	
+
 	return d.base.Allow(ctx, key)
 }
 
@@ -310,4 +311,140 @@ func (d *DynamicRateLimiter) Limit() rate.Limit {
 
 func (d *DynamicRateLimiter) Burst() int {
 	return int(float64(d.base.Burst()) * d.adjustRatio)
+}
+
+// InMemoryRateLimiter implements rate limiting using in-memory storage
+// Useful for login attempt limiting without Redis dependency
+type InMemoryRateLimiter struct {
+	mu         sync.Mutex
+	attempts   map[string]*attemptInfo
+	maxRetries int
+	window     time.Duration
+}
+
+type attemptInfo struct {
+	count     int
+	firstTime time.Time
+	blocked   bool
+	blockTime time.Time
+}
+
+// NewInMemoryRateLimiter creates a new in-memory rate limiter
+func NewInMemoryRateLimiter(maxRetries int, window time.Duration) *InMemoryRateLimiter {
+	limiter := &InMemoryRateLimiter{
+		attempts:   make(map[string]*attemptInfo),
+		maxRetries: maxRetries,
+		window:     window,
+	}
+
+	// Start cleanup goroutine
+	go limiter.cleanup()
+
+	return limiter
+}
+
+func (r *InMemoryRateLimiter) Allow(ctx context.Context, key string) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := time.Now()
+
+	info, exists := r.attempts[key]
+	if !exists {
+		r.attempts[key] = &attemptInfo{
+			count:     1,
+			firstTime: now,
+		}
+		return true, nil
+	}
+
+	// Check if blocked
+	if info.blocked {
+		// Check if block period has expired (15 minutes)
+		if now.Sub(info.blockTime) > 15*time.Minute {
+			// Reset the block
+			info.blocked = false
+			info.count = 1
+			info.firstTime = now
+			return true, nil
+		}
+		return false, nil
+	}
+
+	// Check if window has expired
+	if now.Sub(info.firstTime) > r.window {
+		// Reset the counter
+		info.count = 1
+		info.firstTime = now
+		return true, nil
+	}
+
+	// Increment counter
+	info.count++
+
+	// Check if exceeded max retries
+	if info.count > r.maxRetries {
+		info.blocked = true
+		info.blockTime = now
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func (r *InMemoryRateLimiter) Limit() rate.Limit {
+	return rate.Limit(float64(r.maxRetries) / r.window.Seconds())
+}
+
+func (r *InMemoryRateLimiter) Burst() int {
+	return r.maxRetries
+}
+
+// Reset clears rate limit state for a key (e.g., after successful login)
+func (r *InMemoryRateLimiter) Reset(key string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.attempts, key)
+}
+
+func (r *InMemoryRateLimiter) cleanup() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		r.mu.Lock()
+		now := time.Now()
+		for key, info := range r.attempts {
+			// Remove entries older than 1 hour
+			if now.Sub(info.firstTime) > time.Hour {
+				delete(r.attempts, key)
+			}
+		}
+		r.mu.Unlock()
+	}
+}
+
+// LoginRateLimitMiddleware creates a middleware for rate limiting login attempts
+func LoginRateLimitMiddleware(limiter *InMemoryRateLimiter) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Use IP address as the key for rate limiting
+		key := c.ClientIP()
+
+		allowed, _ := limiter.Allow(c.Request.Context(), key)
+		if !allowed {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error": "Too many failed login attempts. Please try again later.",
+			})
+			c.Abort()
+			return
+		}
+
+		// Continue to next handler
+		c.Next()
+
+		// If login was successful (status 200), reset the rate limiter
+		if c.Writer.Status() == http.StatusOK {
+			limiter.Reset(key)
+		}
+	}
 }

@@ -39,7 +39,7 @@ func NewTransformNodeExecutor() *TransformNodeExecutor {
 
 // Execute executes a transform node
 func (e *TransformNodeExecutor) Execute(ctx context.Context, node Node, input map[string]interface{}) (map[string]interface{}, error) {
-	config, err := e.parseConfig(node.Config)
+	config, err := e.parseConfig(node.Parameters)
 	if err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
@@ -66,7 +66,7 @@ func (e *TransformNodeExecutor) Execute(ctx context.Context, node Node, input ma
 
 // ValidateInput validates the input for the transform node
 func (e *TransformNodeExecutor) ValidateInput(node Node, input map[string]interface{}) error {
-	config, err := e.parseConfig(node.Config)
+	config, err := e.parseConfig(node.Parameters)
 	if err != nil {
 		return err
 	}

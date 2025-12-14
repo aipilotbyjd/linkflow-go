@@ -102,6 +102,7 @@ func setupRouter(h *handlers.WorkflowHandlers, log logger.Logger) *gin.Engine {
 
 	// API routes
 	v1 := router.Group("/api/v1/workflows")
+	v1.Use(authMiddleware()) // Add authentication middleware
 	{
 		// Workflow CRUD
 		v1.GET("", h.ListWorkflows)
@@ -152,6 +153,16 @@ func setupRouter(h *handlers.WorkflowHandlers, log logger.Logger) *gin.Engine {
 		// Search and filter
 		v1.GET("/search", h.SearchWorkflows)
 		v1.GET("/tags", h.GetPopularTags)
+
+		// Workflow triggers
+		v1.POST("/:id/triggers", h.CreateTrigger)
+		v1.GET("/:id/triggers", h.ListTriggers)
+		v1.GET("/:id/triggers/:triggerId", h.GetTrigger)
+		v1.PUT("/:id/triggers/:triggerId", h.UpdateTrigger)
+		v1.DELETE("/:id/triggers/:triggerId", h.DeleteTrigger)
+		v1.POST("/:id/triggers/:triggerId/activate", h.ActivateTrigger)
+		v1.POST("/:id/triggers/:triggerId/deactivate", h.DeactivateTrigger)
+		v1.POST("/:id/triggers/:triggerId/test", h.TestTrigger)
 	}
 
 	return router
@@ -214,7 +225,7 @@ func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-User-ID")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
 
 		if c.Request.Method == "OPTIONS" {
@@ -224,6 +235,60 @@ func corsMiddleware() gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// authMiddleware extracts user information from the request
+// In production, this should validate JWT tokens from the auth service
+func authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Try to get user ID from header (set by API gateway after JWT validation)
+		userID := c.GetHeader("X-User-ID")
+
+		// If not in header, try Authorization header (for direct API calls)
+		if userID == "" {
+			authHeader := c.GetHeader("Authorization")
+			if authHeader != "" {
+				// In production, validate JWT and extract user ID
+				// For now, we'll use a placeholder for development
+				// This should be replaced with actual JWT validation
+				userID = extractUserIDFromToken(authHeader)
+			}
+		}
+
+		// For development/testing, allow a default user if no auth provided
+		if userID == "" {
+			// Check if we're in development mode
+			if gin.Mode() != gin.ReleaseMode {
+				userID = "dev-user-001"
+			} else {
+				c.JSON(401, gin.H{"error": "unauthorized"})
+				c.Abort()
+				return
+			}
+		}
+
+		// Set user ID in context
+		c.Set("user_id", userID)
+		c.Next()
+	}
+}
+
+// extractUserIDFromToken extracts user ID from JWT token
+// This is a placeholder - in production, use proper JWT validation
+func extractUserIDFromToken(authHeader string) string {
+	// Remove "Bearer " prefix if present
+	token := authHeader
+	if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+		token = authHeader[7:]
+	}
+
+	// In production, decode and validate JWT here
+	// For now, return empty to trigger dev mode fallback
+	if token != "" {
+		// Placeholder: In production, decode JWT and return user ID
+		return ""
+	}
+	return ""
 }
 
 func loggingMiddleware(log logger.Logger) gin.HandlerFunc {

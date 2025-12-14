@@ -1,8 +1,22 @@
 package resolver
 
-import "time"
+import (
+	"time"
 
-// User represents a user
+	credentialDomain "github.com/linkflow-go/internal/domain/credential"
+	executionDomain "github.com/linkflow-go/internal/domain/execution"
+	notificationDomain "github.com/linkflow-go/internal/domain/notification"
+	scheduleDomain "github.com/linkflow-go/internal/domain/schedule"
+	userDomain "github.com/linkflow-go/internal/domain/user"
+	webhookDomain "github.com/linkflow-go/internal/domain/webhook"
+	workflowDomain "github.com/linkflow-go/internal/domain/workflow"
+)
+
+// GraphQL DTO types - these are separate from domain models to allow
+// GraphQL-specific formatting, nullable fields, and API versioning.
+// Use the conversion functions below to convert between domain and DTO types.
+
+// User represents a user in GraphQL responses
 type User struct {
 	ID               string    `json:"id"`
 	Email            string    `json:"email"`
@@ -368,4 +382,174 @@ type ExecutionFilter struct {
 	Status     *ExecutionStatus `json:"status"`
 	DateFrom   *time.Time       `json:"dateFrom"`
 	DateTo     *time.Time       `json:"dateTo"`
+}
+
+// Conversion functions from domain models to GraphQL DTOs
+
+// UserFromDomain converts a domain user to GraphQL DTO
+func UserFromDomain(u *userDomain.User) *User {
+	if u == nil {
+		return nil
+	}
+	return &User{
+		ID:               u.ID,
+		Email:            u.Email,
+		Username:         u.Username,
+		FirstName:        strPtr(u.FirstName),
+		LastName:         strPtr(u.LastName),
+		Avatar:           strPtr(u.Avatar),
+		EmailVerified:    u.EmailVerified,
+		TwoFactorEnabled: u.TwoFactorEnabled,
+		Roles:            u.GetRoleNames(),
+		CreatedAt:        u.CreatedAt,
+		UpdatedAt:        u.UpdatedAt,
+	}
+}
+
+// WorkflowFromDomain converts a domain workflow to GraphQL DTO
+func WorkflowFromDomain(w *workflowDomain.Workflow) *Workflow {
+	if w == nil {
+		return nil
+	}
+
+	nodes := make([]*Node, len(w.Nodes))
+	for i, n := range w.Nodes {
+		nodes[i] = &Node{
+			ID:         n.ID,
+			Name:       n.Name,
+			Type:       n.Type,
+			Position:   &Position{X: n.Position.X, Y: n.Position.Y},
+			Parameters: n.Parameters,
+			Disabled:   n.Disabled,
+		}
+	}
+
+	connections := make([]*Connection, len(w.Connections))
+	for i, c := range w.Connections {
+		connections[i] = &Connection{
+			ID:         c.ID,
+			Source:     c.Source,
+			Target:     c.Target,
+			SourcePort: strPtr(c.SourcePort),
+			TargetPort: strPtr(c.TargetPort),
+		}
+	}
+
+	return &Workflow{
+		ID:          w.ID,
+		Name:        w.Name,
+		Description: strPtr(w.Description),
+		Nodes:       nodes,
+		Connections: connections,
+		Settings: &WorkflowSettings{
+			Timeout:        w.Settings.Timeout,
+			RetryOnFailure: w.Settings.RetryOnFailure,
+			MaxRetries:     w.Settings.MaxRetries,
+			Timezone:       w.Settings.Timezone,
+		},
+		Status:    WorkflowStatus(w.Status),
+		IsActive:  w.IsActive,
+		Version:   w.Version,
+		Tags:      w.Tags,
+		CreatedAt: w.CreatedAt,
+		UpdatedAt: w.UpdatedAt,
+	}
+}
+
+// ExecutionFromDomain converts a domain execution to GraphQL DTO
+func ExecutionFromDomain(e *executionDomain.Execution) *Execution {
+	if e == nil {
+		return nil
+	}
+	return &Execution{
+		ID:            e.ID,
+		WorkflowID:    e.WorkflowID,
+		Version:       e.Version,
+		Status:        ExecutionStatus(e.Status),
+		StartedAt:     e.StartedAt,
+		FinishedAt:    e.FinishedAt,
+		ExecutionTime: toIntPtr(int(e.ExecutionTime)),
+		Data:          e.OutputData,
+		Error:         strPtr(e.Error),
+		CreatedAt:     e.CreatedAt,
+	}
+}
+
+// CredentialFromDomain converts a domain credential to GraphQL DTO
+func CredentialFromDomain(c *credentialDomain.Credential) *Credential {
+	if c == nil {
+		return nil
+	}
+	return &Credential{
+		ID:          c.ID,
+		Name:        c.Name,
+		Type:        c.Type,
+		Description: strPtr(c.Description),
+		IsShared:    c.IsShared,
+		LastUsedAt:  c.LastUsedAt,
+		CreatedAt:   c.CreatedAt,
+	}
+}
+
+// ScheduleFromDomain converts a domain schedule to GraphQL DTO
+func ScheduleFromDomain(s *scheduleDomain.Schedule) *Schedule {
+	if s == nil {
+		return nil
+	}
+	return &Schedule{
+		ID:             s.ID,
+		Name:           s.Name,
+		WorkflowID:     s.WorkflowID,
+		CronExpression: s.CronExpression,
+		Timezone:       s.Timezone,
+		IsActive:       s.IsActive,
+		LastRunAt:      s.LastRunAt,
+		NextRunAt:      s.NextRunAt,
+		CreatedAt:      s.CreatedAt,
+	}
+}
+
+// WebhookFromDomain converts a domain webhook to GraphQL DTO
+func WebhookFromDomain(w *webhookDomain.Webhook) *Webhook {
+	if w == nil {
+		return nil
+	}
+	return &Webhook{
+		ID:           w.ID,
+		WorkflowID:   w.WorkflowID,
+		Path:         w.Path,
+		Method:       w.Method,
+		URL:          w.GetURL(""),
+		IsActive:     w.IsActive,
+		LastCalledAt: w.LastCalledAt,
+		CallCount:    int(w.CallCount),
+		CreatedAt:    w.CreatedAt,
+	}
+}
+
+// NotificationFromDomain converts a domain notification to GraphQL DTO
+func NotificationFromDomain(n *notificationDomain.Notification) *Notification {
+	if n == nil {
+		return nil
+	}
+	return &Notification{
+		ID:        n.ID,
+		Type:      n.Type,
+		Title:     n.Subject,
+		Message:   n.Body,
+		Data:      n.Data,
+		CreatedAt: n.CreatedAt,
+	}
+}
+
+// Helper functions
+func strPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func toIntPtr(i int) *int {
+	return &i
 }

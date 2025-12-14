@@ -42,7 +42,7 @@ docker-build: ## Build Docker images for all services
 	@for service in $(SERVICES); do \
 		echo "Building $$service-service image..."; \
 		docker build -t $(DOCKER_REGISTRY)/$$service-service:$(VERSION) \
-			--build-arg SERVICE_NAME=$$service-service \
+			--build-arg SERVICE_NAME=$$service \
 			-f deployments/docker/Dockerfile . || true; \
 	done
 

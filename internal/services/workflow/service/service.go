@@ -2,8 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -59,6 +59,24 @@ func NewWorkflowService(
 }
 
 func (s *WorkflowService) CheckReady() error {
+	// Check database connection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	sqlDB, err := s.db.DB.DB()
+	if err != nil {
+		return err
+	}
+
+	if err := sqlDB.PingContext(ctx); err != nil {
+		return err
+	}
+
+	// Check Redis connection
+	if err := s.redis.Ping(ctx).Err(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -142,17 +160,7 @@ func (s *WorkflowService) UpdateWorkflow(ctx context.Context, req *workflow.Upda
 	}
 
 	// Store previous version for history
-	previousData, _ := wf.ToJSON()
-	version := &workflow.WorkflowVersion{
-		ID:         wf.ID + "_v" + strconv.Itoa(wf.Version),
-		WorkflowID: wf.ID,
-		Version:    wf.Version,
-		Data:       previousData,
-		ChangedBy:  req.UserID,
-		ChangeNote: "Updated workflow",
-		CreatedAt:  time.Now(),
-	}
-	// In a real implementation, we'd save this version to a versions table
+	previousVersion := wf.Version
 
 	// Update workflow fields
 	if req.Name != "" {
@@ -196,7 +204,7 @@ func (s *WorkflowService) UpdateWorkflow(ctx context.Context, req *workflow.Upda
 			"workflow_id":      wf.ID,
 			"user_id":          wf.UserID,
 			"version":          wf.Version,
-			"previous_version": version.Version,
+			"previous_version": previousVersion,
 		},
 	}
 	if err := s.eventBus.Publish(ctx, event); err != nil {
@@ -239,31 +247,226 @@ func (s *WorkflowService) DeleteWorkflow(ctx context.Context, workflowID, userID
 }
 
 func (s *WorkflowService) GetWorkflowVersions(ctx context.Context, workflowID, userID string) ([]interface{}, error) {
-	return []interface{}{}, nil
+	// Verify workflow exists and user has permission
+	if _, err := s.repo.GetWorkflow(ctx, workflowID, userID); err != nil {
+		return nil, ErrWorkflowNotFound
+	}
+
+	versions, err := s.repo.ListVersions(ctx, workflowID)
+	if err != nil {
+		s.logger.Error("Failed to list workflow versions", "workflow_id", workflowID, "error", err)
+		return nil, err
+	}
+
+	// Convert to interface slice
+	result := make([]interface{}, len(versions))
+	for i, v := range versions {
+		result[i] = v
+	}
+
+	return result, nil
 }
 
 func (s *WorkflowService) GetWorkflowVersion(ctx context.Context, workflowID string, version int, userID string) (*workflow.Workflow, error) {
-	return &workflow.Workflow{}, nil
+	// Verify workflow exists and user has permission
+	if _, err := s.repo.GetWorkflow(ctx, workflowID, userID); err != nil {
+		return nil, ErrWorkflowNotFound
+	}
+
+	// Get specific version
+	wv, err := s.repo.GetVersion(ctx, workflowID, version)
+	if err != nil {
+		s.logger.Error("Failed to get workflow version", "workflow_id", workflowID, "version", version, "error", err)
+		return nil, err
+	}
+
+	// Parse workflow from version data
+	var wf workflow.Workflow
+	if err := json.Unmarshal([]byte(wv.Data), &wf); err != nil {
+		s.logger.Error("Failed to parse workflow version data", "error", err)
+		return nil, err
+	}
+
+	return &wf, nil
 }
 
 func (s *WorkflowService) CreateWorkflowVersion(ctx context.Context, workflowID, userID string, req *workflow.CreateVersionRequest) (int, error) {
-	return 1, nil
+	// Get current workflow
+	wf, err := s.repo.GetWorkflow(ctx, workflowID, userID)
+	if err != nil {
+		return 0, ErrWorkflowNotFound
+	}
+
+	// Create new version using repository
+	changeNote := req.Message
+	if changeNote == "" {
+		changeNote = "Manual version created"
+	}
+
+	if err := s.repo.UpdateWithVersion(ctx, wf, changeNote); err != nil {
+		s.logger.Error("Failed to create workflow version", "error", err)
+		return 0, err
+	}
+
+	s.logger.Info("Workflow version created", "workflow_id", workflowID, "version", wf.Version)
+	return wf.Version, nil
 }
 
 func (s *WorkflowService) RollbackWorkflowVersion(ctx context.Context, workflowID string, version int, userID string) error {
+	// Verify workflow exists and user has permission
+	if _, err := s.repo.GetWorkflow(ctx, workflowID, userID); err != nil {
+		return ErrWorkflowNotFound
+	}
+
+	// Restore to specific version
+	if err := s.repo.RestoreVersion(ctx, workflowID, version, userID); err != nil {
+		s.logger.Error("Failed to rollback workflow version", "workflow_id", workflowID, "version", version, "error", err)
+		return err
+	}
+
+	// Publish event
+	event := events.Event{
+		Type: "workflow.version.rollback",
+		Payload: map[string]interface{}{
+			"workflow_id": workflowID,
+			"version":     version,
+			"user_id":     userID,
+		},
+	}
+	if err := s.eventBus.Publish(ctx, event); err != nil {
+		s.logger.Warn("Failed to publish rollback event", "error", err)
+	}
+
+	s.logger.Info("Workflow rolled back", "workflow_id", workflowID, "version", version)
 	return nil
 }
 
 func (s *WorkflowService) ActivateWorkflow(ctx context.Context, workflowID, userID string) error {
+	// Get workflow
+	wf, err := s.repo.GetWorkflow(ctx, workflowID, userID)
+	if err != nil {
+		return ErrWorkflowNotFound
+	}
+
+	// Validate workflow before activation
+	if len(wf.Nodes) > 0 {
+		if err := wf.Validate(); err != nil {
+			s.logger.Error("Workflow validation failed during activation", "error", err)
+			return ErrInvalidWorkflow
+		}
+	}
+
+	// Activate workflow
+	if err := wf.Activate(); err != nil {
+		return err
+	}
+
+	// Update in database
+	if err := s.repo.UpdateWorkflow(ctx, wf); err != nil {
+		s.logger.Error("Failed to activate workflow", "error", err)
+		return err
+	}
+
+	// Activate associated triggers
+	triggers, _ := s.triggerManager.ListTriggers(ctx, workflowID)
+	for _, trigger := range triggers {
+		if trigger.Status == workflow.TriggerStatusInactive {
+			if err := s.triggerManager.ActivateTrigger(ctx, trigger.ID); err != nil {
+				s.logger.Warn("Failed to activate trigger", "trigger_id", trigger.ID, "error", err)
+			}
+		}
+	}
+
+	// Publish event
+	event := events.Event{
+		Type: "workflow.activated",
+		Payload: map[string]interface{}{
+			"workflow_id": workflowID,
+			"user_id":     userID,
+		},
+	}
+	if err := s.eventBus.Publish(ctx, event); err != nil {
+		s.logger.Warn("Failed to publish activation event", "error", err)
+	}
+
+	s.logger.Info("Workflow activated", "workflow_id", workflowID)
 	return nil
 }
 
 func (s *WorkflowService) DeactivateWorkflow(ctx context.Context, workflowID, userID string) error {
+	// Get workflow
+	wf, err := s.repo.GetWorkflow(ctx, workflowID, userID)
+	if err != nil {
+		return ErrWorkflowNotFound
+	}
+
+	// Deactivate workflow
+	wf.Deactivate()
+
+	// Update in database
+	if err := s.repo.UpdateWorkflow(ctx, wf); err != nil {
+		s.logger.Error("Failed to deactivate workflow", "error", err)
+		return err
+	}
+
+	// Deactivate associated triggers
+	triggers, _ := s.triggerManager.ListTriggers(ctx, workflowID)
+	for _, trigger := range triggers {
+		if trigger.Status == workflow.TriggerStatusActive {
+			if err := s.triggerManager.DeactivateTrigger(ctx, trigger.ID); err != nil {
+				s.logger.Warn("Failed to deactivate trigger", "trigger_id", trigger.ID, "error", err)
+			}
+		}
+	}
+
+	// Publish event
+	event := events.Event{
+		Type: "workflow.deactivated",
+		Payload: map[string]interface{}{
+			"workflow_id": workflowID,
+			"user_id":     userID,
+		},
+	}
+	if err := s.eventBus.Publish(ctx, event); err != nil {
+		s.logger.Warn("Failed to publish deactivation event", "error", err)
+	}
+
+	s.logger.Info("Workflow deactivated", "workflow_id", workflowID)
 	return nil
 }
 
 func (s *WorkflowService) DuplicateWorkflow(ctx context.Context, workflowID, userID, name string) (*workflow.Workflow, error) {
-	return &workflow.Workflow{}, nil
+	// Get original workflow
+	original, err := s.repo.GetWorkflow(ctx, workflowID, userID)
+	if err != nil {
+		return nil, ErrWorkflowNotFound
+	}
+
+	// Clone workflow
+	clone := original.Clone(name)
+	clone.UserID = userID
+
+	// Save clone
+	if err := s.repo.CreateWorkflow(ctx, clone); err != nil {
+		s.logger.Error("Failed to duplicate workflow", "error", err)
+		return nil, err
+	}
+
+	// Publish event
+	event := events.Event{
+		Type: "workflow.duplicated",
+		Payload: map[string]interface{}{
+			"original_id": workflowID,
+			"clone_id":    clone.ID,
+			"user_id":     userID,
+		},
+	}
+	if err := s.eventBus.Publish(ctx, event); err != nil {
+		s.logger.Warn("Failed to publish duplication event", "error", err)
+	}
+
+	s.logger.Info("Workflow duplicated", "original_id", workflowID, "clone_id", clone.ID)
+	return clone, nil
 }
 
 func (s *WorkflowService) ValidateWorkflow(ctx context.Context, workflowID, userID string) ([]string, []string, error) {
@@ -303,63 +506,405 @@ func (s *WorkflowService) ValidateWorkflow(ctx context.Context, workflowID, user
 }
 
 func (s *WorkflowService) ExecuteWorkflow(ctx context.Context, workflowID, userID string, data map[string]interface{}) (string, error) {
-	return "exec_id", nil
+	// Get workflow
+	wf, err := s.repo.GetWorkflow(ctx, workflowID, userID)
+	if err != nil {
+		return "", ErrWorkflowNotFound
+	}
+
+	// Check if workflow is active
+	if !wf.IsActive {
+		return "", ErrWorkflowInactive
+	}
+
+	// Generate execution ID
+	executionID := uuid.New().String()
+
+	// Publish execution request event
+	event := events.Event{
+		Type:        "execution.requested",
+		AggregateID: executionID,
+		Payload: map[string]interface{}{
+			"execution_id": executionID,
+			"workflow_id":  workflowID,
+			"user_id":      userID,
+			"input_data":   data,
+			"version":      wf.Version,
+		},
+	}
+	if err := s.eventBus.Publish(ctx, event); err != nil {
+		s.logger.Error("Failed to publish execution request", "error", err)
+		return "", err
+	}
+
+	s.logger.Info("Workflow execution requested", "execution_id", executionID, "workflow_id", workflowID)
+	return executionID, nil
 }
 
 func (s *WorkflowService) TestWorkflow(ctx context.Context, workflowID, userID string, data map[string]interface{}) (interface{}, error) {
-	return nil, nil
+	// Get workflow
+	wf, err := s.repo.GetWorkflow(ctx, workflowID, userID)
+	if err != nil {
+		return nil, ErrWorkflowNotFound
+	}
+
+	// Validate workflow
+	errors, warnings, validationErr := s.validationService.ValidateWorkflow(ctx, wf)
+
+	// Build test result
+	result := map[string]interface{}{
+		"workflow_id": workflowID,
+		"valid":       validationErr == nil,
+		"errors":      errors,
+		"warnings":    warnings,
+		"node_count":  len(wf.Nodes),
+		"input_data":  data,
+		"test_mode":   true,
+	}
+
+	// If valid, simulate execution order
+	if validationErr == nil {
+		order, _ := s.validationService.GetExecutionOrder(ctx, wf)
+		result["execution_order"] = order
+		result["complexity"] = s.validationService.AnalyzeComplexity(ctx, wf)
+	}
+
+	return result, nil
 }
 
 func (s *WorkflowService) GetWorkflowPermissions(ctx context.Context, workflowID, userID string) ([]interface{}, error) {
-	return []interface{}{}, nil
+	// Verify workflow exists
+	if _, err := s.repo.GetWorkflow(ctx, workflowID, userID); err != nil {
+		return nil, ErrWorkflowNotFound
+	}
+
+	// Get permissions from database
+	var permissions []map[string]interface{}
+	err := s.db.WithContext(ctx).
+		Table("workflow.workflow_permissions").
+		Where("workflow_id = ?", workflowID).
+		Find(&permissions).Error
+
+	if err != nil {
+		s.logger.Error("Failed to get workflow permissions", "error", err)
+		return nil, err
+	}
+
+	result := make([]interface{}, len(permissions))
+	for i, p := range permissions {
+		result[i] = p
+	}
+
+	return result, nil
 }
 
 func (s *WorkflowService) ShareWorkflow(ctx context.Context, workflowID, userID, targetUserID, permission string) error {
+	// Verify workflow exists and user is owner
+	wf, err := s.repo.GetWorkflow(ctx, workflowID, userID)
+	if err != nil {
+		return ErrWorkflowNotFound
+	}
+
+	if wf.UserID != userID {
+		return ErrUnauthorized
+	}
+
+	// Create permission record
+	perm := map[string]interface{}{
+		"id":          uuid.New().String(),
+		"workflow_id": workflowID,
+		"user_id":     targetUserID,
+		"permission":  permission,
+		"granted_by":  userID,
+		"created_at":  time.Now(),
+	}
+
+	if err := s.db.WithContext(ctx).Table("workflow.workflow_permissions").Create(&perm).Error; err != nil {
+		s.logger.Error("Failed to share workflow", "error", err)
+		return err
+	}
+
+	s.logger.Info("Workflow shared", "workflow_id", workflowID, "target_user", targetUserID, "permission", permission)
 	return nil
 }
 
 func (s *WorkflowService) UnshareWorkflow(ctx context.Context, workflowID, userID, targetUserID string) error {
+	// Verify workflow exists and user is owner
+	wf, err := s.repo.GetWorkflow(ctx, workflowID, userID)
+	if err != nil {
+		return ErrWorkflowNotFound
+	}
+
+	if wf.UserID != userID {
+		return ErrUnauthorized
+	}
+
+	// Delete permission record
+	result := s.db.WithContext(ctx).
+		Table("workflow.workflow_permissions").
+		Where("workflow_id = ? AND user_id = ?", workflowID, targetUserID).
+		Delete(nil)
+
+	if result.Error != nil {
+		s.logger.Error("Failed to unshare workflow", "error", result.Error)
+		return result.Error
+	}
+
+	s.logger.Info("Workflow unshared", "workflow_id", workflowID, "target_user", targetUserID)
 	return nil
 }
 
 func (s *WorkflowService) PublishWorkflow(ctx context.Context, workflowID, userID, description string, tags []string) error {
+	// Get workflow
+	wf, err := s.repo.GetWorkflow(ctx, workflowID, userID)
+	if err != nil {
+		return ErrWorkflowNotFound
+	}
+
+	// Create template from workflow
+	template := &templates.Template{
+		Name:        wf.Name,
+		Description: description,
+		Category:    "custom",
+		Tags:        tags,
+		CreatorID:   userID,
+		IsPublic:    true,
+	}
+
+	wfJSON, _ := wf.ToJSON()
+	template.Workflow = []byte(wfJSON)
+
+	if err := s.templateManager.CreateTemplate(ctx, template); err != nil {
+		s.logger.Error("Failed to publish workflow", "error", err)
+		return err
+	}
+
+	s.logger.Info("Workflow published", "workflow_id", workflowID, "template_id", template.ID)
 	return nil
 }
 
 func (s *WorkflowService) ImportWorkflow(ctx context.Context, userID string, data interface{}, format string) (*workflow.Workflow, error) {
-	return &workflow.Workflow{}, nil
+	var wf *workflow.Workflow
+
+	switch format {
+	case "json":
+		// Parse JSON data
+		jsonData, err := json.Marshal(data)
+		if err != nil {
+			return nil, err
+		}
+		wf = &workflow.Workflow{}
+		if err := json.Unmarshal(jsonData, wf); err != nil {
+			return nil, err
+		}
+	case "n8n":
+		// Convert n8n format to LinkFlow format
+		wf = convertN8NWorkflow(data)
+	default:
+		return nil, errors.New("unsupported import format")
+	}
+
+	// Generate new ID and set user
+	wf.ID = uuid.New().String()
+	wf.UserID = userID
+	wf.Status = workflow.StatusInactive
+	wf.IsActive = false
+	wf.Version = 1
+	wf.CreatedAt = time.Now()
+	wf.UpdatedAt = time.Now()
+
+	// Save workflow
+	if err := s.repo.CreateWorkflow(ctx, wf); err != nil {
+		s.logger.Error("Failed to import workflow", "error", err)
+		return nil, err
+	}
+
+	s.logger.Info("Workflow imported", "workflow_id", wf.ID, "format", format)
+	return wf, nil
 }
 
 func (s *WorkflowService) ExportWorkflow(ctx context.Context, workflowID, userID, format string) (interface{}, error) {
-	return nil, nil
+	// Get workflow
+	wf, err := s.repo.GetWorkflow(ctx, workflowID, userID)
+	if err != nil {
+		return nil, ErrWorkflowNotFound
+	}
+
+	switch format {
+	case "json":
+		return wf, nil
+	case "n8n":
+		return convertToN8NFormat(wf), nil
+	default:
+		return wf, nil
+	}
 }
 
 func (s *WorkflowService) GetWorkflowStats(ctx context.Context, workflowID, userID string) (interface{}, error) {
-	return nil, nil
+	// Verify workflow exists
+	if _, err := s.repo.GetWorkflow(ctx, workflowID, userID); err != nil {
+		return nil, ErrWorkflowNotFound
+	}
+
+	// Get execution stats from database
+	var stats struct {
+		TotalExecutions   int64   `json:"total_executions"`
+		SuccessfulRuns    int64   `json:"successful_runs"`
+		FailedRuns        int64   `json:"failed_runs"`
+		AvgExecutionTime  float64 `json:"avg_execution_time_ms"`
+		LastExecutionTime *string `json:"last_execution_time"`
+	}
+
+	// Query execution stats
+	s.db.WithContext(ctx).Raw(`
+		SELECT 
+			COUNT(*) as total_executions,
+			SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successful_runs,
+			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_runs,
+			AVG(execution_time) as avg_execution_time,
+			MAX(created_at) as last_execution_time
+		FROM workflow.workflow_executions
+		WHERE workflow_id = ?
+	`, workflowID).Scan(&stats)
+
+	return stats, nil
 }
 
 func (s *WorkflowService) GetWorkflowExecutions(ctx context.Context, workflowID, userID string, page, limit int) ([]interface{}, int64, error) {
-	return []interface{}{}, 0, nil
+	// Verify workflow exists
+	if _, err := s.repo.GetWorkflow(ctx, workflowID, userID); err != nil {
+		return nil, 0, ErrWorkflowNotFound
+	}
+
+	var executions []workflow.WorkflowExecution
+	var total int64
+
+	// Count total
+	s.db.WithContext(ctx).Model(&workflow.WorkflowExecution{}).
+		Where("workflow_id = ?", workflowID).
+		Count(&total)
+
+	// Get paginated results
+	offset := (page - 1) * limit
+	err := s.db.WithContext(ctx).
+		Where("workflow_id = ?", workflowID).
+		Order("created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&executions).Error
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]interface{}, len(executions))
+	for i, e := range executions {
+		result[i] = e
+	}
+
+	return result, total, nil
 }
 
 func (s *WorkflowService) GetLatestRun(ctx context.Context, workflowID, userID string) (interface{}, error) {
-	return nil, nil
+	// Verify workflow exists
+	if _, err := s.repo.GetWorkflow(ctx, workflowID, userID); err != nil {
+		return nil, ErrWorkflowNotFound
+	}
+
+	var execution workflow.WorkflowExecution
+	err := s.db.WithContext(ctx).
+		Where("workflow_id = ?", workflowID).
+		Order("created_at DESC").
+		First(&execution).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return execution, nil
 }
 
 func (s *WorkflowService) ListCategories(ctx context.Context) ([]interface{}, error) {
-	return []interface{}{}, nil
+	categories := s.templateManager.GetCategories()
+	result := make([]interface{}, len(categories))
+	for i, c := range categories {
+		result[i] = c
+	}
+	return result, nil
 }
 
 func (s *WorkflowService) CreateCategory(ctx context.Context, name, description, icon string) (interface{}, error) {
-	return nil, nil
+	category := map[string]interface{}{
+		"id":          uuid.New().String(),
+		"name":        name,
+		"description": description,
+		"icon":        icon,
+		"created_at":  time.Now(),
+	}
+
+	if err := s.db.WithContext(ctx).Table("workflow.categories").Create(&category).Error; err != nil {
+		s.logger.Error("Failed to create category", "error", err)
+		return nil, err
+	}
+
+	return category, nil
 }
 
 func (s *WorkflowService) SearchWorkflows(ctx context.Context, userID, query, category string, tags []string, page, limit int) ([]*workflow.Workflow, int64, error) {
-	return []*workflow.Workflow{}, 0, nil
+	opts := repository.ListWorkflowsOptions{
+		UserID: userID,
+		Search: query,
+		Tags:   tags,
+		Page:   page,
+		Limit:  limit,
+	}
+
+	return s.repo.ListWorkflows(ctx, opts)
 }
 
 func (s *WorkflowService) GetPopularTags(ctx context.Context, limit int) ([]string, error) {
-	return []string{}, nil
+	var tags []string
+
+	// Query most used tags
+	err := s.db.WithContext(ctx).Raw(`
+		SELECT DISTINCT unnest(tags) as tag
+		FROM workflow.workflows
+		WHERE deleted_at IS NULL
+		GROUP BY tag
+		ORDER BY COUNT(*) DESC
+		LIMIT ?
+	`, limit).Scan(&tags).Error
+
+	if err != nil {
+		return []string{}, nil
+	}
+
+	return tags, nil
+}
+
+// Helper functions for import/export
+func convertN8NWorkflow(data interface{}) *workflow.Workflow {
+	// Convert n8n workflow format to LinkFlow format
+	wf := workflow.NewWorkflow("Imported Workflow", "Imported from n8n", "")
+
+	if n8nData, ok := data.(map[string]interface{}); ok {
+		if name, ok := n8nData["name"].(string); ok {
+			wf.Name = name
+		}
+		// Add more conversion logic as needed
+	}
+
+	return wf
+}
+
+func convertToN8NFormat(wf *workflow.Workflow) map[string]interface{} {
+	// Convert LinkFlow workflow to n8n format
+	return map[string]interface{}{
+		"name":        wf.Name,
+		"nodes":       wf.Nodes,
+		"connections": wf.Connections,
+		"settings":    wf.Settings,
+	}
 }
 
 func (s *WorkflowService) HandleExecutionCompleted(ctx context.Context, event events.Event) error {

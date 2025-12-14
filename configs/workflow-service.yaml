@@ -1,0 +1,52 @@
+# Workflow Service Configuration
+
+server:
+  port: 8082
+  host: "0.0.0.0"
+  read_timeout: 30
+  write_timeout: 30
+  shutdown_timeout: 30
+
+database:
+  host: "localhost"
+  port: 5432
+  user: "linkflow"
+  password: "linkflow123"
+  name: "linkflow"
+  ssl_mode: "disable"
+  max_open_conns: 25
+  max_idle_conns: 25
+
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+  pool_size: 10
+
+kafka:
+  brokers:
+    - "localhost:9092"
+  consumer_group: "workflow-service"
+  topic: "workflow-events"
+
+auth:
+  jwt:
+    secret_key: "development-secret-key-change-in-production"
+    expiry_hours: 1
+    refresh_days: 7
+    issuer: "linkflow-auth"
+    algorithm: "HS256"
+
+telemetry:
+  enabled: true
+  jaeger_url: "http://localhost:14268/api/traces"
+  service_name: "workflow-service"
+  sampling_rate: 1.0
+
+logger:
+  level: "info"
+  format: "json"
+  output: "stdout"
+  add_caller: true
+  stacktrace: false

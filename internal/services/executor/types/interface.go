@@ -3,28 +3,21 @@ package types
 import (
 	"context"
 	"time"
+
+	"github.com/linkflow-go/internal/domain/workflow"
 )
 
-// Node represents a workflow node
-type Node struct {
-	ID         string                 `json:"id"`
-	Name       string                 `json:"name"`
-	Type       string                 `json:"type"`
-	Config     interface{}            `json:"config"`
-	Parameters map[string]interface{} `json:"parameters"`
-	Disabled   bool                   `json:"disabled"`
-	RetryCount int                    `json:"retryCount"`
-	Timeout    int                    `json:"timeout"`
-}
+// Node is an alias to the domain Node type for executor compatibility
+type Node = workflow.Node
 
 // NodeExecutor is the interface that all node executors must implement
 type NodeExecutor interface {
 	// Execute runs the node with the given input
 	Execute(ctx context.Context, node Node, input map[string]interface{}) (output map[string]interface{}, err error)
-	
+
 	// ValidateInput validates the input for the node
 	ValidateInput(node Node, input map[string]interface{}) error
-	
+
 	// GetTimeout returns the timeout duration for the node
 	GetTimeout() time.Duration
 }
@@ -33,10 +26,10 @@ type NodeExecutor interface {
 type NodeExecutorFactory interface {
 	// CreateExecutor creates an executor for the given node type
 	CreateExecutor(nodeType string) (NodeExecutor, error)
-	
+
 	// RegisterExecutor registers a custom executor for a node type
 	RegisterExecutor(nodeType string, executor NodeExecutor) error
-	
+
 	// GetSupportedTypes returns a list of supported node types
 	GetSupportedTypes() []string
 }
@@ -53,9 +46,9 @@ type ExecutionContext struct {
 
 // ExecutionResult represents the result of node execution
 type ExecutionResult struct {
-	Success   bool                   `json:"success"`
-	Output    map[string]interface{} `json:"output"`
-	Error     string                 `json:"error,omitempty"`
-	Duration  time.Duration          `json:"duration"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Success  bool                   `json:"success"`
+	Output   map[string]interface{} `json:"output"`
+	Error    string                 `json:"error,omitempty"`
+	Duration time.Duration          `json:"duration"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
