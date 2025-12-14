@@ -78,7 +78,7 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 
 	// Setup HTTP server
 	router := setupRouter(storageHandlers, log)
-	
+
 	httpServer := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
 		Handler:      router,
@@ -99,17 +99,17 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 
 func setupRouter(h *handlers.StorageHandlers, log logger.Logger) *gin.Engine {
 	router := gin.New()
-	
+
 	// Middleware
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
 	router.Use(loggingMiddleware(log))
-	
+
 	// Health checks
-	router.GET("/health", h.Health)
-	router.GET("/ready", h.Ready)
+	router.GET("/health/live", h.Health)
+	router.GET("/health/ready", h.Ready)
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
-	
+
 	// API routes
 	v1 := router.Group("/api/v1/storage")
 	{
@@ -120,40 +120,40 @@ func setupRouter(h *handlers.StorageHandlers, log logger.Logger) *gin.Engine {
 		v1.DELETE("/files/:id", h.DeleteFile)
 		v1.GET("/files/:id/metadata", h.GetFileMetadata)
 		v1.PUT("/files/:id/metadata", h.UpdateFileMetadata)
-		
+
 		// Direct upload URLs
 		v1.POST("/presigned-url", h.GetPresignedURL)
 		v1.POST("/presigned-url/upload", h.GetUploadPresignedURL)
 		v1.POST("/presigned-url/download", h.GetDownloadPresignedURL)
-		
+
 		// Folder operations
 		v1.GET("/folders", h.ListFolders)
 		v1.POST("/folders", h.CreateFolder)
 		v1.DELETE("/folders/:path", h.DeleteFolder)
 		v1.GET("/folders/:path/files", h.ListFolderFiles)
-		
+
 		// File management
 		v1.POST("/files/:id/copy", h.CopyFile)
 		v1.POST("/files/:id/move", h.MoveFile)
 		v1.POST("/files/:id/share", h.ShareFile)
 		v1.GET("/files/:id/versions", h.GetFileVersions)
-		
+
 		// Image processing
 		v1.POST("/images/resize", h.ResizeImage)
 		v1.POST("/images/thumbnail", h.GenerateThumbnail)
-		
+
 		// Quota management
 		v1.GET("/quota", h.GetQuota)
 		v1.GET("/usage", h.GetUsage)
-		
+
 		// Export/Import
 		v1.POST("/export", h.ExportFiles)
 		v1.POST("/import", h.ImportFiles)
-		
+
 		// Search
 		v1.GET("/search", h.SearchFiles)
 	}
-	
+
 	return router
 }
 
@@ -167,27 +167,27 @@ func (s *Server) Start() error {
 
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down server...")
-	
+
 	// Shutdown HTTP server
 	if err := s.httpServer.Shutdown(ctx); err != nil {
 		return fmt.Errorf("failed to shutdown HTTP server: %w", err)
 	}
-	
+
 	// Close event bus
 	if err := s.eventBus.Close(); err != nil {
 		s.logger.Error("Failed to close event bus", "error", err)
 	}
-	
+
 	// Close Redis
 	if err := s.redis.Close(); err != nil {
 		s.logger.Error("Failed to close Redis", "error", err)
 	}
-	
+
 	// Close database
 	if err := s.db.Close(); err != nil {
 		s.logger.Error("Failed to close database", "error", err)
 	}
-	
+
 	return nil
 }
 

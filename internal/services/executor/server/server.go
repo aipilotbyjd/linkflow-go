@@ -50,10 +50,6 @@ func setupRouter(pool *worker.Pool, log logger.Logger) *gin.Engine {
 	router.Use(gin.Recovery())
 
 	// Health endpoints
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
-	})
-
 	router.GET("/health/live", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "alive"})
 	})

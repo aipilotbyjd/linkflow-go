@@ -16,38 +16,38 @@ import (
 // setupRouterWithAuth shows how to integrate auth middleware
 func setupRouterWithAuth(h *handlers.WorkflowHandlers, cfg *config.Config, redisClient *redis.Client, log logger.Logger) (*gin.Engine, error) {
 	router := gin.New()
-	
+
 	// Initialize JWT manager for this service
 	jwtManager, err := jwt.NewManager(cfg.Auth)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Create JWT middleware
 	jwtMiddleware := auth.NewJWTMiddleware(jwtManager, redisClient)
-	
+
 	// Create service-to-service auth (for inter-service communication)
 	serviceAuth := auth.NewServiceToServiceAuth(map[string]string{
 		"executor-service": "executor-secret-token",
 		"schedule-service": "schedule-secret-token",
-		"node-service": "node-secret-token",
+		"node-service":     "node-secret-token",
 	})
-	
+
 	// Global middleware
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
 	router.Use(loggingMiddleware(log))
-	
+
 	// Apply service-to-service auth globally (before JWT)
 	router.Use(serviceAuth.Validate())
-	
+
 	// Apply JWT middleware globally (will skip public endpoints)
 	router.Use(jwtMiddleware.Handle())
-	
+
 	// Health checks (public, no auth required)
-	router.GET("/health", h.Health)
-	router.GET("/ready", h.Ready)
-	
+	router.GET("/health/live", h.Health)
+	router.GET("/health/ready", h.Ready)
+
 	// API routes
 	v1 := router.Group("/api/v1")
 	{
@@ -55,15 +55,15 @@ func setupRouterWithAuth(h *handlers.WorkflowHandlers, cfg *config.Config, redis
 		{
 			// List workflows - requires authentication
 			workflows.GET("", h.ListWorkflows)
-			
+
 			// Create workflow - requires specific permission
-			workflows.POST("", 
+			workflows.POST("",
 				auth.RequireResourcePermission(auth.ResourceWorkflow, auth.ActionCreate),
 				h.CreateWorkflow,
 			)
-			
+
 			// Get workflow - requires read permission or ownership
-			workflows.GET("/:id", 
+			workflows.GET("/:id",
 				auth.RequireOwnership(func(c *gin.Context) (string, error) {
 					// This function should fetch the workflow and return its owner ID
 					// For example:
@@ -75,58 +75,58 @@ func setupRouterWithAuth(h *handlers.WorkflowHandlers, cfg *config.Config, redis
 				}),
 				h.GetWorkflow,
 			)
-			
+
 			// Update workflow - requires update permission and ownership
 			workflows.PUT("/:id",
 				auth.RequireResourcePermission(auth.ResourceWorkflow, auth.ActionUpdate),
 				auth.RequireOwnership(getWorkflowOwner),
 				h.UpdateWorkflow,
 			)
-			
+
 			// Delete workflow - requires delete permission and ownership
 			workflows.DELETE("/:id",
 				auth.RequireResourcePermission(auth.ResourceWorkflow, auth.ActionDelete),
 				auth.RequireOwnership(getWorkflowOwner),
 				h.DeleteWorkflow,
 			)
-			
+
 			// Execute workflow - requires execute permission
 			workflows.POST("/:id/execute",
 				auth.RequireResourcePermission(auth.ResourceWorkflow, auth.ActionExecute),
 				h.ExecuteWorkflow,
 			)
-			
+
 			// Workflow versions - requires read permission
 			workflows.GET("/:id/versions",
 				auth.RequireResourcePermission(auth.ResourceWorkflow, auth.ActionRead),
 				h.GetWorkflowVersions,
 			)
-			
+
 			// Admin-only endpoints
 			adminWorkflows := workflows.Group("")
 			adminWorkflows.Use(auth.RequireRoles("admin", "super_admin"))
 			{
 				// Admin can view all workflows
 				adminWorkflows.GET("/all", h.ListAllWorkflows)
-				
+
 				// Admin can force execute any workflow
 				adminWorkflows.POST("/:id/force-execute", h.ForceExecuteWorkflow)
 			}
 		}
-		
+
 		// Templates endpoint - different permission model
 		templates := v1.Group("/templates")
 		{
 			// Anyone authenticated can view templates
 			templates.GET("", h.ListTemplates)
-			
+
 			// Only admins can create templates
 			templates.POST("",
 				auth.RequireRoles("admin", "template_manager"),
 				h.CreateTemplate,
 			)
 		}
-		
+
 		// Analytics endpoints - require analytics permission
 		analytics := v1.Group("/analytics")
 		analytics.Use(auth.RequireResourcePermission(auth.ResourceAnalytics, auth.ActionRead))
@@ -135,7 +135,7 @@ func setupRouterWithAuth(h *handlers.WorkflowHandlers, cfg *config.Config, redis
 			analytics.GET("/executions", h.GetExecutionAnalytics)
 		}
 	}
-	
+
 	return router, nil
 }
 
@@ -148,7 +148,7 @@ func getWorkflowOwner(c *gin.Context) (string, error) {
 	//     return "", err
 	// }
 	// return workflow.UserID, nil
-	
+
 	// Placeholder for example
 	return workflowID, nil
 }
@@ -160,7 +160,7 @@ func ExampleHandlerUsingAuth(c *gin.Context) {
 	email, _ := auth.GetUserEmail(c)
 	roles, _ := auth.GetUserRoles(c)
 	permissions, _ := auth.GetUserPermissions(c)
-	
+
 	// Check if this is a service-to-service call
 	isService, _ := c.Get("isService")
 	if isService.(bool) {
@@ -171,7 +171,7 @@ func ExampleHandlerUsingAuth(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	// Regular user request
 	c.JSON(200, gin.H{
 		"userID":      userID,
