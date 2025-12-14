@@ -11,13 +11,20 @@ import (
 )
 
 type Config struct {
-	Server    ServerConfig    `mapstructure:"server"`
-	Database  DatabaseConfig  `mapstructure:"database"`
-	Redis     RedisConfig     `mapstructure:"redis"`
-	Kafka     KafkaConfig     `mapstructure:"kafka"`
-	Auth      AuthConfig      `mapstructure:"auth"`
-	Telemetry TelemetryConfig `mapstructure:"telemetry"`
-	Logger    LoggerConfig    `mapstructure:"logger"`
+	Server        ServerConfig        `mapstructure:"server"`
+	Database      DatabaseConfig      `mapstructure:"database"`
+	Redis         RedisConfig         `mapstructure:"redis"`
+	Kafka         KafkaConfig         `mapstructure:"kafka"`
+	Auth          AuthConfig          `mapstructure:"auth"`
+	Telemetry     TelemetryConfig     `mapstructure:"telemetry"`
+	Logger        LoggerConfig        `mapstructure:"logger"`
+	Elasticsearch ElasticsearchConfig `mapstructure:"elasticsearch"`
+}
+
+type ElasticsearchConfig struct {
+	URL      string `mapstructure:"url"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
 }
 
 type ServerConfig struct {
@@ -166,6 +173,9 @@ func setDefaults() {
 	viper.SetDefault("logger.output", "stdout")
 	viper.SetDefault("logger.add_caller", true)
 	viper.SetDefault("logger.stacktrace", false)
+
+	// Elasticsearch defaults
+	viper.SetDefault("elasticsearch.url", "http://localhost:9200")
 }
 
 func overrideFromEnv(cfg *Config) {
@@ -200,6 +210,10 @@ func overrideFromEnv(cfg *Config) {
 
 	if servicePort := viper.GetInt("SERVER_PORT"); servicePort != 0 {
 		cfg.Server.Port = servicePort
+	}
+
+	if esURL := viper.GetString("ELASTICSEARCH_URL"); esURL != "" {
+		cfg.Elasticsearch.URL = esURL
 	}
 }
 

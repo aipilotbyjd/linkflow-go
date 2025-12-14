@@ -32,7 +32,7 @@ type Webhook struct {
 	RequireAuth  bool              `json:"requireAuth" gorm:"default:false"`
 	AuthType     string            `json:"authType"` // none, header, basic, bearer
 	AuthConfig   map[string]string `json:"authConfig" gorm:"serializer:json"`
-	Headers      map[string]string `json:"headers" gorm:"serializer:json"` // Required headers
+	Headers      map[string]string `json:"headers" gorm:"column:headers_config;serializer:json"` // Required headers
 	RateLimit    int               `json:"rateLimit" gorm:"default:100"`   // requests per minute
 	ExpiresAt    *time.Time        `json:"expiresAt"`
 	LastCalledAt *time.Time        `json:"lastCalledAt"`
@@ -43,7 +43,7 @@ type Webhook struct {
 
 // TableName specifies the table name for GORM
 func (Webhook) TableName() string {
-	return "workflow.webhooks"
+	return "webhook.webhooks"
 }
 
 // WebhookExecution records each webhook call
@@ -72,7 +72,7 @@ type WebhookExecution struct {
 
 // TableName specifies the table name for GORM
 func (WebhookExecution) TableName() string {
-	return "workflow.webhook_logs"
+	return "webhook.webhook_logs"
 }
 
 // NewWebhook creates a new webhook

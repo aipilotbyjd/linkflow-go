@@ -58,9 +58,11 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 
 	// Initialize Elasticsearch client
 	esConfig := elasticsearch.Config{
-		Addresses: []string{
-			"http://localhost:9200",
-		},
+		Addresses: []string{cfg.Elasticsearch.URL},
+	}
+	if cfg.Elasticsearch.Username != "" {
+		esConfig.Username = cfg.Elasticsearch.Username
+		esConfig.Password = cfg.Elasticsearch.Password
 	}
 	esClient, err := elasticsearch.NewClient(esConfig)
 	if err != nil {
