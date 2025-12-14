@@ -29,9 +29,9 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/service /app/service
 
-# Copy config files
-COPY configs/rbac_model.conf /app/configs/rbac_model.conf
-COPY configs/rbac_policy.csv /app/configs/rbac_policy.csv
+# Copy RBAC config files
+COPY deployments/rbac/model.conf /app/deployments/rbac/model.conf
+COPY deployments/rbac/policy.csv /app/deployments/rbac/policy.csv
 
 # Create non-root user
 RUN addgroup -g 1001 -S linkflow && \

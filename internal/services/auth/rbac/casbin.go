@@ -27,7 +27,7 @@ func NewEnforcer(db *database.DB, modelPath, policyPath string, log logger.Logge
 
 	// Load model configuration
 	if modelPath == "" {
-		modelPath = "configs/rbac_model.conf"
+		modelPath = "deployments/rbac/model.conf"
 	}
 
 	e, err := casbin.NewEnforcer(modelPath, adapter)
