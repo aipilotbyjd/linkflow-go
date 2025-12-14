@@ -115,7 +115,9 @@ INSERT INTO audit.retention_policies (table_name, retention_days) VALUES
     ('audit.security_events', 730),
     ('webhook.webhook_logs', 30),
     ('notification.queue', 7),
-    ('execution.execution_metrics', 90)
+    ('execution.execution_metrics', 90),
+    ('analytics.system_metrics', 90),
+    ('search.search_history', 30)
 ON CONFLICT (table_name) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
