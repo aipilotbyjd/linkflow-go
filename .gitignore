@@ -39,12 +39,13 @@ vendor/
 # Go workspace file
 go.work
 
-# Environment variables
+# Environment variables and secrets
 .env
 .env.local
 .env.*.local
-configs/kong.env
-configs/*.env
+deployments/kong/kong.env
+deployments/**/*.env
+!deployments/**/*.env.example
 
 # IDE specific files
 .idea/

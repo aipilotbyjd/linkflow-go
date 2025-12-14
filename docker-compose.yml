@@ -82,7 +82,8 @@ services:
   prometheus:
     image: prom/prometheus:v2.48.0
     volumes:
-      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./deployments/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./deployments/prometheus/rules/alerts.yml:/etc/prometheus/rules/alerts.yml
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -100,6 +101,8 @@ services:
       - "3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./deployments/grafana/provisioning:/etc/grafana/provisioning
+      - ./deployments/grafana/dashboards:/var/lib/grafana/dashboards
     networks:
       - linkflow-network
 
@@ -118,7 +121,7 @@ services:
   kong:
     image: kong:3.5
     env_file:
-      - ./configs/kong.env
+      - ./deployments/kong/kong.env
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
@@ -131,7 +134,7 @@ services:
       - "8000:8000"
       - "8443:8443"
     volumes:
-      - ./configs/kong.yml:/kong/declarative/kong.yml
+      - ./deployments/kong/kong.yml:/kong/declarative/kong.yml
     depends_on:
       - auth-service
       - user-service

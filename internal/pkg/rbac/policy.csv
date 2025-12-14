@@ -1,0 +1,81 @@
+# ==========================================
+# SUPER ADMIN - Full access to everything
+# ==========================================
+p, super_admin, *, *
+
+# ==========================================
+# ADMIN - Full access to most resources
+# ==========================================
+p, admin, /api/v1/users/*, *
+p, admin, /api/v1/workflows/*, *
+p, admin, /api/v1/executions/*, *
+p, admin, /api/v1/nodes/*, *
+p, admin, /api/v1/schedules/*, *
+p, admin, /api/v1/credentials/*, read
+p, admin, /api/v1/variables/*, *
+p, admin, /api/v1/webhooks/*, *
+p, admin, /api/v1/notifications/*, *
+p, admin, /api/v1/analytics/*, *
+p, admin, /api/v1/audit/*, *
+p, admin, /api/v1/search/*, *
+p, admin, /api/v1/storage/*, *
+p, admin, /api/v1/billing/*, read
+p, admin, /api/v1/templates/*, *
+
+# ==========================================
+# USER - Standard user permissions
+# ==========================================
+p, user, /api/v1/users/me, *
+p, user, /api/v1/users/:id, read
+p, user, /api/v1/workflows/*, create
+p, user, /api/v1/workflows/owned/*, *
+p, user, /api/v1/executions/owned/*, *
+p, user, /api/v1/nodes/*, read
+p, user, /api/v1/schedules/owned/*, *
+p, user, /api/v1/credentials/owned/*, *
+p, user, /api/v1/variables/owned/*, *
+p, user, /api/v1/webhooks/owned/*, *
+p, user, /api/v1/notifications/owned/*, read
+p, user, /api/v1/analytics/owned/*, read
+p, user, /api/v1/search/*, read
+p, user, /api/v1/storage/owned/*, *
+p, user, /api/v1/billing/owned/*, read
+p, user, /api/v1/templates/*, read
+p, user, /api/v1/templates/owned/*, *
+
+# ==========================================
+# OPERATOR - Execute workflows only
+# ==========================================
+p, operator, /api/v1/workflows/*, read
+p, operator, /api/v1/executions/*, create
+p, operator, /api/v1/executions/*, read
+p, operator, /api/v1/nodes/*, read
+p, operator, /api/v1/schedules/*, read
+p, operator, /api/v1/webhooks/*, read
+p, operator, /api/v1/analytics/*, read
+
+# ==========================================
+# VIEWER - Read-only access
+# ==========================================
+p, viewer, /api/v1/workflows/*, read
+p, viewer, /api/v1/executions/*, read
+p, viewer, /api/v1/nodes/*, read
+p, viewer, /api/v1/users/*, read
+p, viewer, /api/v1/schedules/*, read
+p, viewer, /api/v1/analytics/*, read
+p, viewer, /api/v1/templates/*, read
+
+# ==========================================
+# BILLING_ADMIN - Billing management
+# ==========================================
+p, billing_admin, /api/v1/billing/*, *
+p, billing_admin, /api/v1/users/*, read
+
+# ==========================================
+# ROLE ASSIGNMENTS (examples)
+# ==========================================
+g, alice, admin
+g, bob, user
+g, charlie, viewer
+g, dave, operator
+g, eve, billing_admin

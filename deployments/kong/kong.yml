@@ -1,0 +1,297 @@
+_format_version: "3.0"
+_transform: true
+
+# Kong API Gateway Configuration for LinkFlow
+# All 17 microservices with proper routing
+
+services:
+  # AUTH SERVICE (8001)
+  - name: auth-service
+    url: http://auth-service:8001
+    retries: 5
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      - name: auth-public
+        paths: [/api/v1/auth/login, /api/v1/auth/register, /api/v1/auth/forgot-password]
+        strip_path: false
+        methods: [POST, OPTIONS]
+      - name: auth-protected
+        paths: [/api/v1/auth/profile, /api/v1/auth/logout, /api/v1/auth/refresh]
+        strip_path: false
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+        plugins:
+          - name: jwt
+            config: { secret_is_base64: false, claims_to_verify: ["exp"] }
+    plugins:
+      - name: cors
+        config: { origins: ["*"], methods: [GET, POST, PUT, DELETE, OPTIONS, PATCH], headers: [Authorization, Content-Type], credentials: true }
+      - name: rate-limiting
+        config: { minute: 100, hour: 1000, policy: local }
+
+  # USER SERVICE (8002)
+  - name: user-service
+    url: http://user-service:8002
+    retries: 3
+    routes:
+      - name: user-management
+        paths: [/api/v1/users, /api/v1/teams, /api/v1/organizations]
+        strip_path: false
+        methods: [GET, POST, PUT, DELETE, PATCH, OPTIONS]
+    plugins:
+      - name: jwt
+        config: { secret_is_base64: false, claims_to_verify: ["exp", "nbf"] }
+      - name: rate-limiting
+        config: { minute: 300, hour: 10000, policy: local }
+
+  # WORKFLOW SERVICE (8003)
+  - name: workflow-service
+    url: http://workflow-service:8003
+    retries: 3
+    write_timeout: 300000
+    read_timeout: 300000
+    routes:
+      - name: workflow-crud
+        paths: [/api/v1/workflows, /api/v1/workflow-templates]
+        strip_path: false
+        methods: [GET, POST, PUT, DELETE, PATCH, OPTIONS]
+      - name: workflow-execute
+        paths: [/api/v1/workflows/execute, /api/v1/workflows/test]
+        strip_path: false
+        methods: [POST, OPTIONS]
+        plugins:
+          - name: rate-limiting
+            config: { minute: 50, hour: 500, policy: local }
+      - name: workflow-websocket
+        paths: [/api/v1/workflows/ws, /api/v1/workflows/events]
+        strip_path: false
+        methods: [GET]
+        protocols: [http, https]
+    plugins:
+      - name: jwt
+        config: { secret_is_base64: false }
+      - name: request-size-limiting
+        config: { allowed_payload_size: 50, size_unit: megabytes }
+
+  # EXECUTION SERVICE (8004)
+  - name: execution-service
+    url: http://execution-service:8004
+    retries: 2
+    write_timeout: 600000
+    read_timeout: 600000
+    routes:
+      - name: execution-management
+        paths: [/api/v1/executions, /api/v1/executions/logs]
+        strip_path: false
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+      - name: execution-stream
+        paths: [/api/v1/executions/stream, /api/v1/executions/live]
+        strip_path: false
+        methods: [GET]
+        protocols: [http, https]
+      - name: execution-control
+        paths: [/api/v1/executions/pause, /api/v1/executions/resume, /api/v1/executions/cancel]
+        strip_path: false
+        methods: [POST, OPTIONS]
+        plugins:
+          - name: rate-limiting
+            config: { minute: 30, hour: 300, policy: local }
+    plugins:
+      - name: jwt
+        config: { secret_is_base64: false }
+
+  # NODE SERVICE (8005)
+  - name: node-service
+    url: http://node-service:8005
+    routes:
+      - name: node-management
+        paths: [/api/v1/nodes]
+        strip_path: false
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+    plugins:
+      - name: jwt
+        config: { secret_is_base64: false }
+
+  # WEBHOOK SERVICE (8006) - Public endpoints
+  - name: webhook-service
+    url: http://webhook-service:8006
+    retries: 1
+    routes:
+      - name: webhook-public
+        paths: [/webhook, /webhooks]
+        strip_path: false
+        methods: [GET, POST, PUT, DELETE, PATCH, OPTIONS]
+      - name: webhook-management
+        paths: [/api/v1/webhooks, /api/v1/webhook-logs]
+        strip_path: false
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+        plugins:
+          - name: jwt
+            config: { secret_is_base64: false }
+    plugins:
+      - name: rate-limiting
+        config: { minute: 1000, hour: 50000, policy: local }
+      - name: request-size-limiting
+        config: { allowed_payload_size: 10, size_unit: megabytes }
+
+  # CREDENTIAL SERVICE (8007)
+  - name: credential-service
+    url: http://credential-service:8007
+    routes:
+      - name: credential-management
+        paths: [/api/v1/credentials]
+        strip_path: false
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+    plugins:
+      - name: jwt
+        config: { secret_is_base64: false }
+
+  # VARIABLE SERVICE (8008)
+  - name: variable-service
+    url: http://variable-service:8008
+    routes:
+      - name: variable-management
+        paths: [/api/v1/variables]
+        strip_path: false
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+    plugins:
+      - name: jwt
+        config: { secret_is_base64: false }
+
+  # SCHEDULE SERVICE (8009)
+  - name: schedule-service
+    url: http://schedule-service:8009
+    routes:
+      - name: schedule-management
+        paths: [/api/v1/schedules]
+        strip_path: false
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+    plugins:
+      - name: jwt
+        config: { secret_is_base64: false }
+
+  # NOTIFICATION SERVICE (8010)
+  - name: notification-service
+    url: http://notification-service:8010
+    routes:
+      - name: notification-management
+        paths: [/api/v1/notifications]
+        strip_path: false
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+    plugins:
+      - name: jwt
+        config: { secret_is_base64: false }
+
+  # AUDIT SERVICE (8011)
+  - name: audit-service
+    url: http://audit-service:8011
+    routes:
+      - name: audit-logs
+        paths: [/api/v1/audit]
+        strip_path: false
+        methods: [GET, OPTIONS]
+    plugins:
+      - name: jwt
+        config: { secret_is_base64: false }
+
+  # ANALYTICS SERVICE (8012)
+  - name: analytics-service
+    url: http://analytics-service:8012
+    routes:
+      - name: analytics-data
+        paths: [/api/v1/analytics]
+        strip_path: false
+        methods: [GET, OPTIONS]
+    plugins:
+      - name: jwt
+        config: { secret_is_base64: false }
+
+  # SEARCH SERVICE (8013)
+  - name: search-service
+    url: http://search-service:8013
+    routes:
+      - name: search-api
+        paths: [/api/v1/search]
+        strip_path: false
+        methods: [GET, POST, OPTIONS]
+    plugins:
+      - name: jwt
+        config: { secret_is_base64: false }
+
+  # STORAGE SERVICE (8014)
+  - name: storage-service
+    url: http://storage-service:8014
+    write_timeout: 120000
+    read_timeout: 120000
+    routes:
+      - name: storage-api
+        paths: [/api/v1/storage]
+        strip_path: false
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+    plugins:
+      - name: jwt
+        config: { secret_is_base64: false }
+      - name: request-size-limiting
+        config: { allowed_payload_size: 100, size_unit: megabytes }
+
+  # BILLING SERVICE (8015)
+  - name: billing-service
+    url: http://billing-service:8015
+    routes:
+      - name: billing-api
+        paths: [/api/v1/billing]
+        strip_path: false
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+    plugins:
+      - name: jwt
+        config: { secret_is_base64: false }
+
+  # WEBSOCKET SERVICE (8016)
+  - name: websocket-service
+    url: http://websocket-service:8016
+    retries: 1
+    write_timeout: 0
+    read_timeout: 0
+    routes:
+      - name: websocket-connection
+        paths: [/ws]
+        strip_path: false
+        methods: [GET]
+        protocols: [http, https]
+
+  # HEALTH CHECK
+  - name: health-service
+    url: http://kong:8001
+    routes:
+      - name: health-check
+        paths: [/health, /api/health]
+        methods: [GET, HEAD]
+        plugins:
+          - name: request-transformer
+            config: { replace: { uri: /status } }
+
+# GLOBAL PLUGINS
+plugins:
+  - name: correlation-id
+    config: { header_name: X-Request-Id, generator: uuid, echo_downstream: true }
+  - name: prometheus
+    config: { status_code_metrics: true, latency_metrics: true, bandwidth_metrics: true }
+  - name: response-transformer
+    config:
+      add:
+        headers:
+          - X-Frame-Options:DENY
+          - X-Content-Type-Options:nosniff
+          - Strict-Transport-Security:max-age=31536000
+
+# CONSUMERS
+consumers:
+  - username: internal-service-account
+    custom_id: svc-internal-001
+    keyauth_credentials:
+      - key: ${INTERNAL_API_KEY}
+  - username: webhook-service-account
+    custom_id: svc-webhook-001
+    keyauth_credentials:
+      - key: ${WEBHOOK_API_KEY}
