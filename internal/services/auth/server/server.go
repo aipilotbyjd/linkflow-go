@@ -78,7 +78,7 @@ func New(cfg *config.Config, log logger.Logger) (*Server, error) {
 	}
 
 	// Initialize RBAC enforcer
-	rbacEnforcer, err := rbac.NewEnforcer(db, "deployments/rbac/model.conf", "deployments/rbac/policy.csv", log)
+	rbacEnforcer, err := rbac.NewEnforcer(db, "deployments/config/rbac/model.conf", "deployments/config/rbac/policy.csv", log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RBAC enforcer: %w", err)
 	}

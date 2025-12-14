@@ -194,7 +194,7 @@ make clean          # Clean build artifacts
 
 | Method | Use Case | Command |
 |--------|----------|---------|
-| **ArgoCD (GitOps)** | Production - auto-deploy on git push | `kubectl apply -f deployments/argocd/` |
+| **ArgoCD (GitOps)** | Production - auto-deploy on git push | `kubectl apply -f deployments/config/argocd/` |
 | **Helm** | Production - manual control | `helm install linkflow deployments/helm/linkflow` |
 | **Kustomize** | Staging/Dev | `kubectl apply -k deployments/kubernetes/` |
 | **kubectl** | Quick testing | `kubectl apply -f deployments/kubernetes/services/` |
@@ -210,7 +210,7 @@ kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/st
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
 
 # 3. Deploy LinkFlow application
-kubectl apply -f deployments/argocd/application.yaml
+kubectl apply -f deployments/config/argocd/application.yaml
 
 # 4. From now on, just push to git
 git push origin main
@@ -255,18 +255,18 @@ kubectl delete -k deployments/kubernetes/
 
 ```bash
 # 1. Setup Istio
-kubectl apply -f deployments/istio/
+kubectl apply -f deployments/gateway/istio/
 
 # 2. Setup Kafka topics
-kubectl apply -f deployments/kafka/topics.yaml
+kubectl apply -f deployments/config/kafka/topics.yaml
 
 # 3. Setup Kong routes
-kubectl apply -f deployments/kong/
+kubectl apply -f deployments/gateway/kong/
 
 # 4. Setup monitoring
 kubectl apply -f deployments/kubernetes/monitoring/
-kubectl apply -f deployments/loki/
-kubectl apply -f deployments/jaeger/
+kubectl apply -f deployments/monitoring/loki/
+kubectl apply -f deployments/monitoring/jaeger/
 ```
 
 ---
@@ -359,7 +359,7 @@ Internet → Istio Gateway → VirtualService → DestinationRule → Service �
 
 ### Routing Configuration
 
-All API routes are defined in `deployments/istio/virtual-service.yaml`:
+All API routes are defined in `deployments/gateway/istio/virtual-service.yaml`:
 
 ```yaml
 /api/v1/auth/*        → auth-service

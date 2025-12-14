@@ -62,7 +62,7 @@ spec:
   source:
     repoURL: https://github.com/your-org/linkflow-go
     targetRevision: HEAD
-    path: deployments/kong
+    path: deployments/gateway/kong
   destination:
     server: https://kubernetes.default.svc
     namespace: linkflow

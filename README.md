@@ -216,7 +216,7 @@ helm uninstall linkflow --namespace linkflow
 kubectl label namespace linkflow istio-injection=enabled
 
 # Apply Istio configurations
-kubectl apply -f deployments/istio/
+kubectl apply -f deployments/gateway/istio/
 
 # Access Istio dashboards
 istioctl dashboard kiali    # Service mesh visualization
@@ -231,7 +231,7 @@ istioctl dashboard jaeger    # Distributed tracing
 ./scripts/install-argocd.sh install
 
 # Apply LinkFlow applications
-kubectl apply -f deployments/argocd/
+kubectl apply -f deployments/config/argocd/
 
 # Access ArgoCD UI (port-forward)
 kubectl port-forward svc/argocd-server -n argocd 8080:443

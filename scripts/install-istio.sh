@@ -136,7 +136,7 @@ apply_linkflow_config() {
     print_status "Applying LinkFlow Istio configurations..."
     
     # Apply all Istio configurations
-    kubectl apply -f deployments/istio/
+    kubectl apply -f deployments/gateway/istio/
     
     print_status "LinkFlow Istio configurations applied ✓"
 }

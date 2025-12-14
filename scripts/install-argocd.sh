@@ -79,7 +79,7 @@ configure_argocd() {
     
     # Apply LinkFlow applications
     print_status "Applying LinkFlow ArgoCD applications..."
-    kubectl apply -f deployments/argocd/
+    kubectl apply -f deployments/config/argocd/
     
     print_status "ArgoCD configured successfully ✓"
 }

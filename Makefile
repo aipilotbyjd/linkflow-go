@@ -128,12 +128,12 @@ istio-setup: ## Configure Istio for LinkFlow
 .PHONY: logging-deploy
 logging-deploy: ## Deploy log aggregation stack (ELK/Loki)
 	@echo "${GREEN}Deploying logging stack...${NC}"
-	@kubectl apply -f deployments/loki/
+	@kubectl apply -f deployments/monitoring/loki/
 
 .PHONY: tracing-deploy
 tracing-deploy: ## Deploy distributed tracing (Jaeger)
 	@echo "${GREEN}Deploying Jaeger tracing...${NC}"
-	@kubectl apply -f deployments/jaeger/
+	@kubectl apply -f deployments/monitoring/jaeger/
 
 .PHONY: test
 test: ## Run unit tests

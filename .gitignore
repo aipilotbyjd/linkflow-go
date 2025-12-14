@@ -43,7 +43,7 @@ go.work
 .env
 .env.local
 .env.*.local
-deployments/kong/kong.env
+deployments/gateway/kong/kong.env
 deployments/**/*.env
 !deployments/**/*.env.example
 

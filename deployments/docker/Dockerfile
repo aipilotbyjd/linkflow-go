@@ -30,8 +30,8 @@ WORKDIR /app
 COPY --from=builder /app/service /app/service
 
 # Copy RBAC config files
-COPY deployments/rbac/model.conf /app/deployments/rbac/model.conf
-COPY deployments/rbac/policy.csv /app/deployments/rbac/policy.csv
+COPY deployments/config/rbac/model.conf /app/deployments/config/rbac/model.conf
+COPY deployments/config/rbac/policy.csv /app/deployments/config/rbac/policy.csv
 
 # Create non-root user
 RUN addgroup -g 1001 -S linkflow && \
