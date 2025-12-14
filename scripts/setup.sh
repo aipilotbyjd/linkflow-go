@@ -79,10 +79,10 @@ sleep 10
 # Run database migrations
 echo "Running database migrations..."
 # Create migration files first if they don't exist
-mkdir -p deployments/migrations
+mkdir -p migrations
 
 # Create initial migration
-cat > deployments/migrations/000001_init_schema.up.sql <<EOF
+cat > migrations/000001_init_schema.up.sql <<EOF
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(36) PRIMARY KEY,
@@ -159,7 +159,7 @@ CREATE INDEX idx_executions_status ON workflow_executions(status);
 CREATE INDEX idx_sessions_user_id ON sessions(user_id);
 EOF
 
-cat > deployments/migrations/000001_init_schema.down.sql <<EOF
+cat > migrations/000001_init_schema.down.sql <<EOF
 DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS workflow_executions;
 DROP TABLE IF EXISTS workflows;

@@ -101,7 +101,7 @@ jobs:
       env:
         DATABASE_URL: postgres://linkflow:linkflow123@localhost:5432/linkflow_test?sslmode=disable
       run: |
-        migrate -path deployments/migrations -database "$DATABASE_URL" up
+        migrate -path migrations -database "$DATABASE_URL" up
 
     - name: Run unit tests
       env:

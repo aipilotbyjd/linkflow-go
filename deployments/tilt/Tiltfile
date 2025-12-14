@@ -119,7 +119,7 @@ local_resource(
 local_resource(
     'migrate',
     'go run ./scripts/migrate.go up',
-    deps=['./deployments/migrations'],
+    deps=['./migrations'],
     labels=['database']
 )
 

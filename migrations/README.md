@@ -41,13 +41,13 @@ This directory contains all database migrations for the LinkFlow platform.
 ### Using golang-migrate
 ```bash
 # Apply all migrations
-migrate -path deployments/migrations -database "postgres://user:pass@localhost:5432/linkflow?sslmode=disable" up
+migrate -path migrations -database "postgres://user:pass@localhost:5432/linkflow?sslmode=disable" up
 
 # Rollback last migration
-migrate -path deployments/migrations -database "postgres://user:pass@localhost:5432/linkflow?sslmode=disable" down 1
+migrate -path migrations -database "postgres://user:pass@localhost:5432/linkflow?sslmode=disable" down 1
 
 # Go to specific version
-migrate -path deployments/migrations -database "postgres://user:pass@localhost:5432/linkflow?sslmode=disable" goto 5
+migrate -path migrations -database "postgres://user:pass@localhost:5432/linkflow?sslmode=disable" goto 5
 ```
 
 ### Using Make
@@ -137,22 +137,22 @@ The `000018_seed_data` migration includes:
 
 ```bash
 # Rollback single migration
-migrate -path deployments/migrations -database "$DB_URL" down 1
+migrate -path migrations -database "$DB_URL" down 1
 
 # Rollback to specific version
-migrate -path deployments/migrations -database "$DB_URL" goto 10
+migrate -path migrations -database "$DB_URL" goto 10
 
 # Full rollback (DANGER: destroys all data)
-migrate -path deployments/migrations -database "$DB_URL" down
+migrate -path migrations -database "$DB_URL" down
 ```
 
 ## Adding New Migrations
 
 ```bash
 # Create new migration files
-touch deployments/migrations/000019_new_feature.up.sql
-touch deployments/migrations/000019_new_feature.down.sql
+touch migrations/000019_new_feature.up.sql
+touch migrations/000019_new_feature.down.sql
 
 # Or use migrate CLI
-migrate create -ext sql -dir deployments/migrations -seq new_feature
+migrate create -ext sql -dir migrations -seq new_feature
 ```

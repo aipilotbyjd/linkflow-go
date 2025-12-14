@@ -128,12 +128,12 @@ istio-setup: ## Configure Istio for LinkFlow
 .PHONY: logging-deploy
 logging-deploy: ## Deploy log aggregation stack (ELK/Loki)
 	@echo "${GREEN}Deploying logging stack...${NC}"
-	@kubectl apply -f deployments/logging/
+	@kubectl apply -f deployments/loki/
 
 .PHONY: tracing-deploy
 tracing-deploy: ## Deploy distributed tracing (Jaeger)
 	@echo "${GREEN}Deploying Jaeger tracing...${NC}"
-	@kubectl apply -f deployments/tracing/
+	@kubectl apply -f deployments/jaeger/
 
 .PHONY: test
 test: ## Run unit tests
@@ -185,12 +185,12 @@ mocks: ## Generate mocks
 .PHONY: migrate-up
 migrate-up: ## Run database migrations up
 	@echo "${GREEN}Running migrations up...${NC}"
-	@migrate -path deployments/migrations -database "postgres://localhost/linkflow?sslmode=disable" up
+	@migrate -path migrations -database "postgres://localhost/linkflow?sslmode=disable" up
 
 .PHONY: migrate-down
 migrate-down: ## Run database migrations down
 	@echo "${GREEN}Running migrations down...${NC}"
-	@migrate -path deployments/migrations -database "postgres://localhost/linkflow?sslmode=disable" down
+	@migrate -path migrations -database "postgres://localhost/linkflow?sslmode=disable" down
 
 .PHONY: run-local
 run-local: ## Run services locally with docker-compose

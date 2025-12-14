@@ -15,7 +15,7 @@ DB_USER=${LINKFLOW_DB_USER:-linkflow}
 DB_PASSWORD=${LINKFLOW_DB_PASSWORD:-linkflow123}
 
 DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable"
-MIGRATIONS_PATH="deployments/migrations"
+MIGRATIONS_PATH="migrations"
 
 # Check if migrate tool is installed
 if ! command -v migrate &> /dev/null; then

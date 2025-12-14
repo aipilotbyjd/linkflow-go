@@ -265,8 +265,8 @@ kubectl apply -f deployments/kong/
 
 # 4. Setup monitoring
 kubectl apply -f deployments/k8s/monitoring/
-kubectl apply -f deployments/logging/
-kubectl apply -f deployments/tracing/
+kubectl apply -f deployments/loki/
+kubectl apply -f deployments/jaeger/
 ```
 
 ---
