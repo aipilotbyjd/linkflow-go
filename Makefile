@@ -209,7 +209,7 @@ logs: ## Show logs for local services
 .PHONY: k8s-delete
 k8s-delete: ## Delete from Kubernetes
 	@echo "${RED}Deleting from Kubernetes...${NC}"
-	@kubectl delete -f deployments/k8s/
+	@kubectl delete -f deployments/kubernetes/
 
 .PHONY: helm-install
 helm-install: ## Install Helm chart

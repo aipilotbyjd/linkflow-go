@@ -166,17 +166,17 @@ make k8s-status
 kubectl create namespace linkflow
 
 # Apply configurations
-kubectl apply -f deployments/k8s/namespace.yaml
-kubectl apply -f deployments/k8s/configmap.yaml
-kubectl apply -f deployments/k8s/secrets.yaml
+kubectl apply -f deployments/kubernetes/namespace.yaml
+kubectl apply -f deployments/kubernetes/configmap.yaml
+kubectl apply -f deployments/kubernetes/secrets.yaml
 
 # Deploy services
-kubectl apply -f deployments/k8s/auth/
-kubectl apply -f deployments/k8s/workflow/
-kubectl apply -f deployments/k8s/execution/
+kubectl apply -f deployments/kubernetes/auth/
+kubectl apply -f deployments/kubernetes/workflow/
+kubectl apply -f deployments/kubernetes/execution/
 
 # Deploy ingress
-kubectl apply -f deployments/k8s/ingress.yaml
+kubectl apply -f deployments/kubernetes/ingress.yaml
 
 # Check deployment status
 kubectl get pods -n linkflow

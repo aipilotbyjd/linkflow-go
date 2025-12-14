@@ -196,8 +196,8 @@ make clean          # Clean build artifacts
 |--------|----------|---------|
 | **ArgoCD (GitOps)** | Production - auto-deploy on git push | `kubectl apply -f deployments/argocd/` |
 | **Helm** | Production - manual control | `helm install linkflow deployments/helm/linkflow` |
-| **Kustomize** | Staging/Dev | `kubectl apply -k deployments/k8s/` |
-| **kubectl** | Quick testing | `kubectl apply -f deployments/k8s/services/` |
+| **Kustomize** | Staging/Dev | `kubectl apply -k deployments/kubernetes/` |
+| **kubectl** | Quick testing | `kubectl apply -f deployments/kubernetes/services/` |
 
 ### Option 1: GitOps with ArgoCD (Recommended)
 
@@ -242,13 +242,13 @@ helm uninstall linkflow --namespace linkflow
 
 ```bash
 # Deploy all
-kubectl apply -k deployments/k8s/
+kubectl apply -k deployments/kubernetes/
 
 # Deploy specific overlay
-kubectl apply -k deployments/k8s/overlays/production/
+kubectl apply -k deployments/kubernetes/overlays/production/
 
 # Delete all
-kubectl delete -k deployments/k8s/
+kubectl delete -k deployments/kubernetes/
 ```
 
 ### Post-Deployment Setup
@@ -264,7 +264,7 @@ kubectl apply -f deployments/kafka/topics.yaml
 kubectl apply -f deployments/kong/
 
 # 4. Setup monitoring
-kubectl apply -f deployments/k8s/monitoring/
+kubectl apply -f deployments/kubernetes/monitoring/
 kubectl apply -f deployments/loki/
 kubectl apply -f deployments/jaeger/
 ```
@@ -528,7 +528,7 @@ kubectl exec -n linkflow kafka-0 -- \
 ```
 1. Developer pushes to main branch
 2. ArgoCD detects change (polls every 3 min)
-3. ArgoCD syncs K8s manifests from deployments/k8s/
+3. ArgoCD syncs K8s manifests from deployments/kubernetes/
 4. Kubernetes applies changes
 5. Pods roll out with zero downtime
 ```

@@ -56,7 +56,7 @@ for service in services:
     )
     
     # Deploy to Kubernetes
-    k8s_yaml('deployments/k8s/' + service + '-service.yaml')
+    k8s_yaml('deployments/kubernetes/' + service + '-service.yaml')
     
     # Configure port forwarding
     k8s_resource(
@@ -66,7 +66,7 @@ for service in services:
     )
 
 # Deploy infrastructure
-k8s_yaml('deployments/k8s/infrastructure.yaml')
+k8s_yaml('deployments/kubernetes/infrastructure.yaml')
 
 # Infrastructure resources
 k8s_resource('postgres', port_forwards='5432:5432')

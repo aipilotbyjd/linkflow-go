@@ -423,7 +423,7 @@ Logging (ELK):
 - **Orchestration**: Kubernetes (local: Kind/Minikube, prod: EKS/GKE)
 - **GitOps**: ArgoCD for continuous deployment
 - **Service Mesh**: Istio for traffic management
-- **Manifests**: `/deployments/k8s` for raw manifests
+- **Manifests**: `/deployments/kubernetes` for raw manifests
 - **Helm Charts**: `/deployments/helm` for templated deployments
 - **Environment Configs**: ConfigMaps and Secrets per namespace
 - **Health Checks**: Readiness and liveness probes required

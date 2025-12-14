@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/your-org/linkflow-go
     targetRevision: HEAD
-    path: deployments/k8s
+    path: deployments/kubernetes
   destination:
     server: https://kubernetes.default.svc
     namespace: linkflow
@@ -41,7 +41,7 @@ spec:
   source:
     repoURL: https://github.com/your-org/linkflow-go
     targetRevision: HEAD
-    path: deployments/k8s/monitoring
+    path: deployments/kubernetes/monitoring
   destination:
     server: https://kubernetes.default.svc
     namespace: linkflow

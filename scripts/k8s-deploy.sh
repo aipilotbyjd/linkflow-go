@@ -54,19 +54,19 @@ create_namespace() {
         print_info "Namespace '$NAMESPACE' already exists"
     else
         print_status "Creating namespace '$NAMESPACE'"
-        $KUBECTL apply -f deployments/k8s/namespace.yaml
+        $KUBECTL apply -f deployments/kubernetes/namespace.yaml
     fi
 }
 
 # Apply configurations
 apply_configs() {
     print_status "Applying ConfigMaps..."
-    $KUBECTL apply -f deployments/k8s/configmap.yaml
+    $KUBECTL apply -f deployments/kubernetes/configmap.yaml
     
     print_status "Applying Secrets..."
-    if [ -f deployments/k8s/secrets.yaml ]; then
+    if [ -f deployments/kubernetes/secrets.yaml ]; then
         print_warning "Applying secrets from file. Use a secrets manager in production!"
-        $KUBECTL apply -f deployments/k8s/secrets.yaml
+        $KUBECTL apply -f deployments/kubernetes/secrets.yaml
     else
         print_warning "No secrets file found. Services may not start properly."
     fi
@@ -77,9 +77,9 @@ deploy_services() {
     local services=("auth" "user" "workflow" "execution")
     
     for service in "${services[@]}"; do
-        if [ -d "deployments/k8s/$service" ]; then
+        if [ -d "deployments/kubernetes/$service" ]; then
             print_status "Deploying $service service..."
-            $KUBECTL apply -f deployments/k8s/$service/
+            $KUBECTL apply -f deployments/kubernetes/$service/
         else
             print_warning "Skipping $service service (directory not found)"
         fi
@@ -91,28 +91,28 @@ deploy_infrastructure() {
     print_status "Deploying infrastructure components..."
     
     # Deploy database if manifest exists
-    if [ -f "deployments/k8s/infrastructure/postgres.yaml" ]; then
+    if [ -f "deployments/kubernetes/infrastructure/postgres.yaml" ]; then
         print_status "Deploying PostgreSQL..."
-        $KUBECTL apply -f deployments/k8s/infrastructure/postgres.yaml
+        $KUBECTL apply -f deployments/kubernetes/infrastructure/postgres.yaml
     fi
     
     # Deploy Redis if manifest exists
-    if [ -f "deployments/k8s/infrastructure/redis.yaml" ]; then
+    if [ -f "deployments/kubernetes/infrastructure/redis.yaml" ]; then
         print_status "Deploying Redis..."
-        $KUBECTL apply -f deployments/k8s/infrastructure/redis.yaml
+        $KUBECTL apply -f deployments/kubernetes/infrastructure/redis.yaml
     fi
     
     # Deploy Kafka if manifest exists
-    if [ -f "deployments/k8s/infrastructure/kafka.yaml" ]; then
+    if [ -f "deployments/kubernetes/infrastructure/kafka.yaml" ]; then
         print_status "Deploying Kafka..."
-        $KUBECTL apply -f deployments/k8s/infrastructure/kafka.yaml
+        $KUBECTL apply -f deployments/kubernetes/infrastructure/kafka.yaml
     fi
 }
 
 # Deploy ingress
 deploy_ingress() {
     print_status "Deploying Ingress rules..."
-    $KUBECTL apply -f deployments/k8s/ingress.yaml
+    $KUBECTL apply -f deployments/kubernetes/ingress.yaml
 }
 
 # Wait for deployments to be ready
@@ -190,7 +190,7 @@ cleanup() {
     
     if [[ $REPLY == "yes" ]]; then
         print_status "Cleaning up resources..."
-        $KUBECTL delete -f deployments/k8s/ --recursive --ignore-not-found
+        $KUBECTL delete -f deployments/kubernetes/ --recursive --ignore-not-found
         print_status "Cleanup complete"
     else
         print_info "Cleanup cancelled"
