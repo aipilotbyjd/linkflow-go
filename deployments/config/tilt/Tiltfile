@@ -38,20 +38,20 @@ for service in services:
         entrypoint=['/app/' + service + '-service'],
         only=[
             './cmd/services/' + service,
-            './internal/services/' + service,
-            './internal/domain',
+            './internal/' + service,
+            './pkg/contracts',
             './pkg',
             './go.mod',
             './go.sum'
         ],
         live_update=[
             sync('./cmd/services/' + service, '/app/cmd/services/' + service),
-            sync('./internal/services/' + service, '/app/internal/services/' + service),
-            sync('./internal/domain', '/app/internal/domain'),
+            sync('./internal/' + service, '/app/internal/' + service),
+            sync('./pkg/contracts', '/app/pkg/contracts'),
             sync('./pkg', '/app/pkg'),
             run('go mod download', trigger=['./go.mod', './go.sum']),
             run('go build -o /app/' + service + '-service ./cmd/services/' + service, 
-                trigger=['./cmd/services/' + service, './internal/services/' + service])
+                trigger=['./cmd/services/' + service, './internal/' + service, './pkg/contracts'])
         ]
     )
     

@@ -27,6 +27,12 @@ GO_LDFLAGS := -s -w \
               -X main.CommitHash=$(COMMIT_HASH) \
               -X main.BuildTime=$(BUILD_TIME)
 
+# Tools (prefer local PATH, fall back to GOPATH/bin)
+GOLANGCI_LINT ?= $(shell command -v golangci-lint 2>/dev/null)
+ifeq ($(GOLANGCI_LINT),)
+GOLANGCI_LINT := $(shell go env GOPATH)/bin/golangci-lint
+endif
+
 # Directories
 BIN_DIR      := bin
 DIST_DIR     := dist
@@ -181,7 +187,7 @@ test-short: ## Run quick tests only
 
 lint: ## Run linter (golangci-lint)
 	@echo "$(GREEN)Running linter...$(NC)"
-	@golangci-lint run ./...
+	@$(GOLANGCI_LINT) run ./...
 
 fmt: ## Format code
 	@echo "$(GREEN)Formatting code...$(NC)"

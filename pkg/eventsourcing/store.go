@@ -15,34 +15,34 @@ import (
 type EventStore interface {
 	// Save stores events in the event store
 	Save(ctx context.Context, events []Event) error
-	
+
 	// Load retrieves all events for an aggregate
 	Load(ctx context.Context, aggregateID string) ([]Event, error)
-	
+
 	// LoadFromVersion retrieves events starting from a specific version
 	LoadFromVersion(ctx context.Context, aggregateID string, fromVersion int) ([]Event, error)
-	
+
 	// LoadSnapshot retrieves the latest snapshot for an aggregate
 	LoadSnapshot(ctx context.Context, aggregateID string) (*Snapshot, error)
-	
+
 	// SaveSnapshot stores a snapshot
 	SaveSnapshot(ctx context.Context, snapshot *Snapshot) error
-	
+
 	// GetAggregateVersion returns the current version of an aggregate
 	GetAggregateVersion(ctx context.Context, aggregateID string) (int, error)
 }
 
 // Event represents a domain event
 type Event struct {
-	ID           string                 `json:"id" gorm:"primaryKey"`
-	AggregateID  string                 `json:"aggregateId" gorm:"not null;index"`
-	Type         string                 `json:"type" gorm:"not null;index"`
-	Version      int                    `json:"version" gorm:"not null"`
-	Payload      json.RawMessage        `json:"payload" gorm:"type:jsonb"`
-	Metadata     map[string]string      `json:"metadata" gorm:"serializer:json"`
-	Timestamp    time.Time              `json:"timestamp" gorm:"not null;index"`
-	UserID       string                 `json:"userId" gorm:"index"`
-	CorrelationID string                `json:"correlationId" gorm:"index"`
+	ID            string            `json:"id" gorm:"primaryKey"`
+	AggregateID   string            `json:"aggregateId" gorm:"not null;index"`
+	Type          string            `json:"type" gorm:"not null;index"`
+	Version       int               `json:"version" gorm:"not null"`
+	Payload       json.RawMessage   `json:"payload" gorm:"type:jsonb"`
+	Metadata      map[string]string `json:"metadata" gorm:"serializer:json"`
+	Timestamp     time.Time         `json:"timestamp" gorm:"not null;index"`
+	UserID        string            `json:"userId" gorm:"index"`
+	CorrelationID string            `json:"correlationId" gorm:"index"`
 }
 
 // Snapshot represents an aggregate snapshot
@@ -73,7 +73,7 @@ func (s *GormEventStore) Save(ctx context.Context, events []Event) error {
 	if len(events) == 0 {
 		return nil
 	}
-	
+
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Verify version continuity
 		aggregateID := events[0].AggregateID
@@ -81,38 +81,38 @@ func (s *GormEventStore) Save(ctx context.Context, events []Event) error {
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		
+
 		expectedVersion := currentVersion
 		for i, event := range events {
 			expectedVersion++
 			if event.Version != expectedVersion {
-				return fmt.Errorf("version mismatch: expected %d, got %d for event %d", 
+				return fmt.Errorf("version mismatch: expected %d, got %d for event %d",
 					expectedVersion, event.Version, i)
 			}
-			
+
 			// Set event ID if not provided
 			if event.ID == "" {
 				event.ID = uuid.New().String()
 			}
-			
+
 			// Set timestamp if not provided
 			if event.Timestamp.IsZero() {
 				event.Timestamp = time.Now()
 			}
-			
+
 			// Save event
 			if err := tx.Create(&event).Error; err != nil {
 				return fmt.Errorf("failed to save event: %w", err)
 			}
 		}
-		
+
 		// Check if we need to create a snapshot
 		if s.snapshotFrequency > 0 && expectedVersion%s.snapshotFrequency == 0 {
 			// This would typically trigger snapshot creation asynchronously
 			// For now, we'll just mark it as needed
 			_ = s.markSnapshotNeeded(tx, aggregateID, expectedVersion)
 		}
-		
+
 		return nil
 	})
 }
@@ -124,7 +124,7 @@ func (s *GormEventStore) Load(ctx context.Context, aggregateID string) ([]Event,
 		Where("aggregate_id = ?", aggregateID).
 		Order("version ASC").
 		Find(&events).Error
-	
+
 	return events, err
 }
 
@@ -135,7 +135,7 @@ func (s *GormEventStore) LoadFromVersion(ctx context.Context, aggregateID string
 		Where("aggregate_id = ? AND version > ?", aggregateID, fromVersion).
 		Order("version ASC").
 		Find(&events).Error
-	
+
 	return events, err
 }
 
@@ -146,11 +146,11 @@ func (s *GormEventStore) LoadSnapshot(ctx context.Context, aggregateID string) (
 		Where("aggregate_id = ?", aggregateID).
 		Order("version DESC").
 		First(&snapshot).Error
-	
+
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
-	
+
 	return &snapshot, err
 }
 
@@ -159,18 +159,18 @@ func (s *GormEventStore) SaveSnapshot(ctx context.Context, snapshot *Snapshot) e
 	if snapshot.ID == "" {
 		snapshot.ID = uuid.New().String()
 	}
-	
+
 	if snapshot.Timestamp.IsZero() {
 		snapshot.Timestamp = time.Now()
 	}
-	
+
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Delete old snapshots (keep only the latest)
 		if err := tx.Where("aggregate_id = ?", snapshot.AggregateID).
 			Delete(&Snapshot{}).Error; err != nil {
 			return err
 		}
-		
+
 		// Save new snapshot
 		return tx.Create(snapshot).Error
 	})
@@ -184,7 +184,7 @@ func (s *GormEventStore) GetAggregateVersion(ctx context.Context, aggregateID st
 		Where("aggregate_id = ?", aggregateID).
 		Select("COALESCE(MAX(version), 0)").
 		Scan(&maxVersion).Error
-	
+
 	return maxVersion, err
 }
 
@@ -194,7 +194,7 @@ func (s *GormEventStore) getVersionInTx(tx *gorm.DB, aggregateID string) (int, e
 		Where("aggregate_id = ?", aggregateID).
 		Select("COALESCE(MAX(version), 0)").
 		Scan(&maxVersion).Error
-	
+
 	return maxVersion, err
 }
 
@@ -208,10 +208,10 @@ func (s *GormEventStore) markSnapshotNeeded(tx *gorm.DB, aggregateID string, ver
 type EventBus interface {
 	// Publish sends an event to all subscribers
 	Publish(ctx context.Context, event Event) error
-	
+
 	// Subscribe registers a handler for specific event types
 	Subscribe(eventType string, handler EventHandler) error
-	
+
 	// Unsubscribe removes a handler
 	Unsubscribe(eventType string, handler EventHandler) error
 }
@@ -243,48 +243,48 @@ type EventQuery struct {
 // QueryEvents queries events based on criteria
 func (s *GormEventStore) QueryEvents(ctx context.Context, query EventQuery) ([]Event, error) {
 	q := s.db.WithContext(ctx).Model(&Event{})
-	
+
 	if query.AggregateID != "" {
 		q = q.Where("aggregate_id = ?", query.AggregateID)
 	}
-	
+
 	if len(query.EventTypes) > 0 {
 		q = q.Where("type IN ?", query.EventTypes)
 	}
-	
+
 	if query.FromVersion > 0 {
 		q = q.Where("version >= ?", query.FromVersion)
 	}
-	
+
 	if query.ToVersion > 0 {
 		q = q.Where("version <= ?", query.ToVersion)
 	}
-	
+
 	if !query.FromTimestamp.IsZero() {
 		q = q.Where("timestamp >= ?", query.FromTimestamp)
 	}
-	
+
 	if !query.ToTimestamp.IsZero() {
 		q = q.Where("timestamp <= ?", query.ToTimestamp)
 	}
-	
+
 	if query.UserID != "" {
 		q = q.Where("user_id = ?", query.UserID)
 	}
-	
+
 	q = q.Order("timestamp ASC, version ASC")
-	
+
 	if query.Limit > 0 {
 		q = q.Limit(query.Limit)
 	}
-	
+
 	if query.Offset > 0 {
 		q = q.Offset(query.Offset)
 	}
-	
+
 	var events []Event
 	err := q.Find(&events).Error
-	
+
 	return events, err
 }
 
@@ -293,7 +293,7 @@ func (s *GormEventStore) GetEventStats(ctx context.Context, aggregateID string) 
 	stats := &EventStats{
 		AggregateID: aggregateID,
 	}
-	
+
 	// Total events
 	err := s.db.WithContext(ctx).
 		Model(&Event{}).
@@ -302,17 +302,17 @@ func (s *GormEventStore) GetEventStats(ctx context.Context, aggregateID string) 
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// First and last event times
 	var firstEvent, lastEvent Event
-	
+
 	if err := s.db.WithContext(ctx).
 		Where("aggregate_id = ?", aggregateID).
 		Order("timestamp ASC").
 		First(&firstEvent).Error; err == nil {
 		stats.FirstEventTime = &firstEvent.Timestamp
 	}
-	
+
 	if err := s.db.WithContext(ctx).
 		Where("aggregate_id = ?", aggregateID).
 		Order("timestamp DESC").
@@ -320,13 +320,13 @@ func (s *GormEventStore) GetEventStats(ctx context.Context, aggregateID string) 
 		stats.LastEventTime = &lastEvent.Timestamp
 		stats.CurrentVersion = lastEvent.Version
 	}
-	
+
 	// Event type counts
 	type TypeCount struct {
 		Type  string
 		Count int64
 	}
-	
+
 	var typeCounts []TypeCount
 	s.db.WithContext(ctx).
 		Model(&Event{}).
@@ -334,18 +334,18 @@ func (s *GormEventStore) GetEventStats(ctx context.Context, aggregateID string) 
 		Where("aggregate_id = ?", aggregateID).
 		Group("type").
 		Scan(&typeCounts)
-	
+
 	stats.EventTypeCounts = make(map[string]int64)
 	for _, tc := range typeCounts {
 		stats.EventTypeCounts[tc.Type] = tc.Count
 	}
-	
+
 	// Snapshot info
 	if snapshot, err := s.LoadSnapshot(ctx, aggregateID); err == nil && snapshot != nil {
 		stats.LastSnapshotVersion = &snapshot.Version
 		stats.LastSnapshotTime = &snapshot.Timestamp
 	}
-	
+
 	return stats, nil
 }
 

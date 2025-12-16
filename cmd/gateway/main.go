@@ -2,18 +2,12 @@ package main
 
 import (
 	"context"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	// "github.com/99designs/gqlgen/graphql/handler" // Commented until schema is generated
-	"github.com/99designs/gqlgen/graphql/playground"
-	"github.com/gin-gonic/gin"
-	// "github.com/linkflow-go/internal/gateway/graph" // Commented until used
-	"github.com/linkflow-go/internal/gateway/graph/generated"
-	"github.com/linkflow-go/internal/gateway/resolver"
+	"github.com/linkflow-go/internal/gateway/server"
 	"github.com/linkflow-go/pkg/config"
 	"github.com/linkflow-go/pkg/logger"
 )
@@ -28,42 +22,15 @@ func main() {
 	// Initialize logger
 	log := logger.New(cfg.Logger.ToLoggerConfig())
 
-	// Create resolver
-	resolver := resolver.NewResolver(cfg, log)
-
-	// Create GraphQL server
-	// TODO: Use gqlgen to generate the proper schema
-	// srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: resolver}))
-	_ = resolver // Suppress unused variable warning
-	_ = generated.Config{} // Reference the type to avoid import issues
-
-	// Setup Gin router
-	router := gin.New()
-	router.Use(gin.Recovery())
-	router.Use(corsMiddleware())
-
-	// GraphQL endpoint - temporarily disabled until schema is generated
-	// router.POST("/graphql", graphqlHandler(srv))
-	// router.GET("/graphql", graphqlHandler(srv))
-
-	// GraphQL playground
-	router.GET("/playground", playgroundHandler())
-
-	// Health check
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "healthy"})
-	})
-
-	// Create HTTP server
-	httpServer := &http.Server{
-		Addr:    ":4000",
-		Handler: router,
+	// Create server
+	srv, err := server.New(cfg, log)
+	if err != nil {
+		log.Fatal("Failed to create server", "error", err)
 	}
 
 	// Start server in goroutine
 	go func() {
-		log.Info("Starting GraphQL gateway", "port", 4000)
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.Start(); err != nil {
 			log.Fatal("Failed to start server", "error", err)
 		}
 	}()
@@ -73,47 +40,12 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	log.Info("Shutting down GraphQL gateway...")
-
 	// Graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-
-	if err := httpServer.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(ctx); err != nil {
 		log.Error("Server forced to shutdown", "error", err)
 	}
 
 	log.Info("GraphQL gateway exited")
-}
-
-// graphqlHandler is temporarily commented out until schema is generated
-/*
-func graphqlHandler(srv *handler.Server) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		srv.ServeHTTP(c.Writer, c.Request)
-	}
-}
-*/
-
-func playgroundHandler() gin.HandlerFunc {
-	h := playground.Handler("GraphQL Playground", "/graphql")
-	return func(c *gin.Context) {
-		h.ServeHTTP(c.Writer, c.Request)
-	}
-}
-
-func corsMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-
-		c.Next()
-	}
 }

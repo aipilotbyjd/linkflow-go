@@ -47,7 +47,7 @@ func NewDBMonitor(db *gorm.DB, logger *zap.Logger) (*DBMonitor, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sql.DB: %w", err)
 	}
-	
+
 	metrics := &DBMetrics{
 		ConnectionsActive: promauto.NewGauge(prometheus.GaugeOpts{
 			Name: "database_connections_active",
@@ -106,7 +106,7 @@ func NewDBMonitor(db *gorm.DB, logger *zap.Logger) (*DBMonitor, error) {
 			[]string{"table", "index"},
 		),
 	}
-	
+
 	monitor := &DBMonitor{
 		db:              db,
 		sqlDB:           sqlDB,
@@ -115,10 +115,10 @@ func NewDBMonitor(db *gorm.DB, logger *zap.Logger) (*DBMonitor, error) {
 		slowQueryLogger: NewSlowQueryLogger(logger),
 		stopChan:        make(chan struct{}),
 	}
-	
+
 	// Register callbacks
 	monitor.registerCallbacks()
-	
+
 	return monitor, nil
 }
 
@@ -128,12 +128,12 @@ func (m *DBMonitor) registerCallbacks() {
 	m.db.Callback().Query().Before("gorm:query").Register("monitor:before_query", func(db *gorm.DB) {
 		db.InstanceSet("query_start", time.Now())
 	})
-	
+
 	// After query callback
 	m.db.Callback().Query().After("gorm:query").Register("monitor:after_query", func(db *gorm.DB) {
 		m.recordQuery(db)
 	})
-	
+
 	// Error callback
 	m.db.Callback().Query().After("gorm:query").Register("monitor:error", func(db *gorm.DB) {
 		if db.Error != nil && db.Error != gorm.ErrRecordNotFound {
@@ -150,10 +150,10 @@ func (m *DBMonitor) registerCallbacks() {
 func (m *DBMonitor) recordQuery(db *gorm.DB) {
 	if startTime, ok := db.InstanceGet("query_start"); ok {
 		duration := time.Since(startTime.(time.Time))
-		
+
 		m.metrics.QueriesTotal.Inc()
 		m.metrics.QueryDuration.Observe(duration.Seconds())
-		
+
 		// Check for slow query
 		if duration > SlowQueryThreshold {
 			m.metrics.SlowQueries.Inc()
@@ -171,10 +171,10 @@ func (m *DBMonitor) Start(ctx context.Context) error {
 	}
 	m.running = true
 	m.mu.Unlock()
-	
+
 	// Start monitoring goroutine
 	go m.monitor(ctx)
-	
+
 	return nil
 }
 
@@ -182,7 +182,7 @@ func (m *DBMonitor) Start(ctx context.Context) error {
 func (m *DBMonitor) Stop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	if m.running {
 		close(m.stopChan)
 		m.running = false
@@ -193,7 +193,7 @@ func (m *DBMonitor) Stop() {
 func (m *DBMonitor) monitor(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -214,10 +214,10 @@ func (m *DBMonitor) collectMetrics() {
 	m.metrics.ConnectionsIdle.Set(float64(stats.Idle))
 	m.metrics.ConnectionsMax.Set(float64(stats.MaxOpenConnections))
 	m.metrics.ConnectionsWait.Set(float64(stats.WaitCount))
-	
+
 	// Table sizes
 	m.collectTableSizes()
-	
+
 	// Index usage
 	m.collectIndexUsage()
 }
@@ -232,19 +232,19 @@ func (m *DBMonitor) collectTableSizes() {
 		FROM pg_tables
 		WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
 	`
-	
+
 	type tableSize struct {
 		Schema string
 		Table  string
 		Size   int64
 	}
-	
+
 	var sizes []tableSize
 	if err := m.db.Raw(query).Scan(&sizes).Error; err != nil {
 		m.logger.Error("failed to collect table sizes", zap.Error(err))
 		return
 	}
-	
+
 	for _, size := range sizes {
 		m.metrics.TableSizeBytes.WithLabelValues(size.Table, size.Schema).Set(float64(size.Size))
 	}
@@ -265,19 +265,19 @@ func (m *DBMonitor) collectIndexUsage() {
 		WHERE ut.schemaname NOT IN ('pg_catalog', 'information_schema')
 			AND (ut.seq_scan + ui.idx_scan) > 0
 	`
-	
+
 	type indexUsage struct {
 		TableName  string
 		IndexName  string
 		UsageRatio float64
 	}
-	
+
 	var usages []indexUsage
 	if err := m.db.Raw(query).Scan(&usages).Error; err != nil {
 		m.logger.Error("failed to collect index usage", zap.Error(err))
 		return
 	}
-	
+
 	for _, usage := range usages {
 		m.metrics.IndexUsage.WithLabelValues(usage.TableName, usage.IndexName).Set(usage.UsageRatio / 100)
 	}
@@ -296,7 +296,7 @@ func (m *DBMonitor) GetConnectionPoolStats() sql.DBStats {
 // GetQueryStats returns query statistics
 func (m *DBMonitor) GetQueryStats(ctx context.Context) (*QueryStats, error) {
 	stats := &QueryStats{}
-	
+
 	// Get total queries
 	query := `
 		SELECT 
@@ -306,25 +306,25 @@ func (m *DBMonitor) GetQueryStats(ctx context.Context) (*QueryStats, error) {
 			SUM(calls) as total_calls
 		FROM pg_stat_statements
 	`
-	
+
 	err := m.db.Raw(query).Scan(stats).Error
 	if err != nil {
 		// pg_stat_statements might not be enabled
 		m.logger.Warn("failed to get query stats", zap.Error(err))
 	}
-	
+
 	// Get cache hit ratio
 	cacheQuery := `
 		SELECT 
 			sum(heap_blks_hit) / nullif(sum(heap_blks_hit) + sum(heap_blks_read), 0) as cache_hit_ratio
 		FROM pg_statio_user_tables
 	`
-	
+
 	var cacheHitRatio *float64
 	if err := m.db.Raw(cacheQuery).Scan(&cacheHitRatio).Error; err == nil && cacheHitRatio != nil {
 		stats.CacheHitRatio = *cacheHitRatio
 	}
-	
+
 	return stats, nil
 }
 
@@ -333,7 +333,7 @@ func (m *DBMonitor) GetTableStats(ctx context.Context, tableName string) (*Table
 	stats := &TableStats{
 		TableName: tableName,
 	}
-	
+
 	// Get row count and size
 	sizeQuery := `
 		SELECT 
@@ -344,11 +344,11 @@ func (m *DBMonitor) GetTableStats(ctx context.Context, tableName string) (*Table
 		FROM pg_stat_user_tables
 		WHERE tablename = $1
 	`
-	
+
 	if err := m.db.Raw(sizeQuery, tableName).Scan(stats).Error; err != nil {
 		return nil, err
 	}
-	
+
 	// Get index information
 	indexQuery := `
 		SELECT 
@@ -359,11 +359,11 @@ func (m *DBMonitor) GetTableStats(ctx context.Context, tableName string) (*Table
 		FROM pg_stat_user_indexes
 		WHERE tablename = $1
 	`
-	
+
 	if err := m.db.Raw(indexQuery, tableName).Scan(&stats.Indexes).Error; err != nil {
 		m.logger.Warn("failed to get index stats", zap.Error(err))
 	}
-	
+
 	return stats, nil
 }
 
@@ -378,12 +378,12 @@ type QueryStats struct {
 
 // TableStats contains table statistics
 type TableStats struct {
-	TableName    string       `json:"tableName"`
-	RowCount     int64        `json:"rowCount"`
-	TotalSize    string       `json:"totalSize"`
-	TableSize    string       `json:"tableSize"`
-	IndexesSize  string       `json:"indexesSize"`
-	Indexes      []IndexStats `json:"indexes"`
+	TableName   string       `json:"tableName"`
+	RowCount    int64        `json:"rowCount"`
+	TotalSize   string       `json:"totalSize"`
+	TableSize   string       `json:"tableSize"`
+	IndexesSize string       `json:"indexesSize"`
+	Indexes     []IndexStats `json:"indexes"`
 }
 
 // IndexStats contains index statistics
@@ -400,19 +400,19 @@ func (m *DBMonitor) HealthCheck(ctx context.Context) (*HealthStatus, error) {
 		Timestamp: time.Now(),
 		Healthy:   true,
 	}
-	
+
 	// Check connection
 	if err := m.sqlDB.PingContext(ctx); err != nil {
 		status.Healthy = false
 		status.Issues = append(status.Issues, fmt.Sprintf("connection failed: %v", err))
 	}
-	
+
 	// Check connection pool
 	stats := m.sqlDB.Stats()
 	if stats.OpenConnections > 0 && float64(stats.InUse)/float64(stats.OpenConnections) > 0.9 {
 		status.Warnings = append(status.Warnings, "connection pool utilization > 90%")
 	}
-	
+
 	// Check for long-running queries
 	var longQueries int64
 	longQueryCheck := `
@@ -421,34 +421,34 @@ func (m *DBMonitor) HealthCheck(ctx context.Context) (*HealthStatus, error) {
 		WHERE state != 'idle' 
 		AND query_start < NOW() - INTERVAL '1 minute'
 	`
-	
+
 	if err := m.db.Raw(longQueryCheck).Scan(&longQueries).Error; err == nil && longQueries > 0 {
-		status.Warnings = append(status.Warnings, 
+		status.Warnings = append(status.Warnings,
 			fmt.Sprintf("%d long-running queries (> 1 minute)", longQueries))
 	}
-	
+
 	// Check replication lag (if applicable)
 	var replicationLag *int64
 	lagQuery := `
 		SELECT EXTRACT(EPOCH FROM (NOW() - pg_last_xact_replay_timestamp()))::INT as lag_seconds
 		FROM pg_stat_replication
 	`
-	
+
 	if err := m.db.Raw(lagQuery).Scan(&replicationLag).Error; err == nil && replicationLag != nil && *replicationLag > 10 {
-		status.Warnings = append(status.Warnings, 
+		status.Warnings = append(status.Warnings,
 			fmt.Sprintf("replication lag: %d seconds", *replicationLag))
 	}
-	
+
 	status.ConnectionPool = stats
-	
+
 	return status, nil
 }
 
 // HealthStatus represents database health status
 type HealthStatus struct {
-	Timestamp      time.Time     `json:"timestamp"`
-	Healthy        bool          `json:"healthy"`
-	Issues         []string      `json:"issues,omitempty"`
-	Warnings       []string      `json:"warnings,omitempty"`
-	ConnectionPool sql.DBStats   `json:"connectionPool"`
+	Timestamp      time.Time   `json:"timestamp"`
+	Healthy        bool        `json:"healthy"`
+	Issues         []string    `json:"issues,omitempty"`
+	Warnings       []string    `json:"warnings,omitempty"`
+	ConnectionPool sql.DBStats `json:"connectionPool"`
 }

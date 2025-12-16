@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/linkflow-go/internal/services/analytics/server"
+	"github.com/linkflow-go/internal/analytics/server"
 	"github.com/linkflow-go/pkg/config"
 	"github.com/linkflow-go/pkg/logger"
 )

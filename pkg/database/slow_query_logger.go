@@ -13,10 +13,10 @@ const SlowQueryThreshold = 100 * time.Millisecond
 
 // SlowQueryLogger logs and tracks slow queries
 type SlowQueryLogger struct {
-	logger      *zap.Logger
-	queries     []SlowQueryInfo
-	maxQueries  int
-	mu          sync.RWMutex
+	logger     *zap.Logger
+	queries    []SlowQueryInfo
+	maxQueries int
+	mu         sync.RWMutex
 }
 
 // SlowQueryInfo contains information about a slow query
@@ -40,23 +40,23 @@ func NewSlowQueryLogger(logger *zap.Logger) *SlowQueryLogger {
 func (l *SlowQueryLogger) Log(query string, duration time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	
+
 	// Log to logger
 	l.logger.Warn("slow query detected",
 		zap.String("query", query),
 		zap.Duration("duration", duration),
 		zap.String("threshold", SlowQueryThreshold.String()),
 	)
-	
+
 	// Store in memory
 	info := SlowQueryInfo{
 		Query:     query,
 		Duration:  duration,
 		Timestamp: time.Now(),
 	}
-	
+
 	l.queries = append(l.queries, info)
-	
+
 	// Keep only last N queries
 	if len(l.queries) > l.maxQueries {
 		l.queries = l.queries[len(l.queries)-l.maxQueries:]
@@ -67,20 +67,20 @@ func (l *SlowQueryLogger) Log(query string, duration time.Duration) {
 func (l *SlowQueryLogger) GetRecent(limit int) []SlowQueryInfo {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
-	
+
 	if limit <= 0 || limit > len(l.queries) {
 		limit = len(l.queries)
 	}
-	
+
 	// Return most recent queries
 	start := len(l.queries) - limit
 	if start < 0 {
 		start = 0
 	}
-	
+
 	result := make([]SlowQueryInfo, limit)
 	copy(result, l.queries[start:])
-	
+
 	return result
 }
 
@@ -88,33 +88,33 @@ func (l *SlowQueryLogger) GetRecent(limit int) []SlowQueryInfo {
 func (l *SlowQueryLogger) GetStats() SlowQueryStats {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
-	
+
 	stats := SlowQueryStats{
 		TotalCount: len(l.queries),
 	}
-	
+
 	if len(l.queries) == 0 {
 		return stats
 	}
-	
+
 	// Calculate statistics
 	var totalDuration time.Duration
 	stats.MaxDuration = l.queries[0].Duration
 	stats.MinDuration = l.queries[0].Duration
-	
+
 	queryCount := make(map[string]int)
-	
+
 	for _, q := range l.queries {
 		totalDuration += q.Duration
-		
+
 		if q.Duration > stats.MaxDuration {
 			stats.MaxDuration = q.Duration
 		}
-		
+
 		if q.Duration < stats.MinDuration {
 			stats.MinDuration = q.Duration
 		}
-		
+
 		// Track query patterns (simplified - just first 50 chars)
 		pattern := q.Query
 		if len(pattern) > 50 {
@@ -122,9 +122,9 @@ func (l *SlowQueryLogger) GetStats() SlowQueryStats {
 		}
 		queryCount[pattern]++
 	}
-	
+
 	stats.AvgDuration = totalDuration / time.Duration(len(l.queries))
-	
+
 	// Find most frequent slow queries
 	for pattern, count := range queryCount {
 		stats.TopQueries = append(stats.TopQueries, QueryPattern{
@@ -132,7 +132,7 @@ func (l *SlowQueryLogger) GetStats() SlowQueryStats {
 			Count:   count,
 		})
 	}
-	
+
 	// Sort top queries by count
 	for i := 0; i < len(stats.TopQueries)-1; i++ {
 		for j := i + 1; j < len(stats.TopQueries); j++ {
@@ -141,12 +141,12 @@ func (l *SlowQueryLogger) GetStats() SlowQueryStats {
 			}
 		}
 	}
-	
+
 	// Keep only top 10
 	if len(stats.TopQueries) > 10 {
 		stats.TopQueries = stats.TopQueries[:10]
 	}
-	
+
 	return stats
 }
 
@@ -154,7 +154,7 @@ func (l *SlowQueryLogger) GetStats() SlowQueryStats {
 func (l *SlowQueryLogger) Clear() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	
+
 	l.queries = l.queries[:0]
 }
 
@@ -193,20 +193,20 @@ func (a *QueryAnalyzer) Analyze(query string, duration time.Duration) *QueryAnal
 		IsSlow:      duration > SlowQueryThreshold,
 		Suggestions: []string{},
 	}
-	
+
 	// Check for common issues
 	a.checkMissingIndex(query, analysis)
 	a.checkFullTableScan(query, analysis)
 	a.checkNPlusOne(query, analysis)
 	a.checkMissingLimit(query, analysis)
-	
+
 	return analysis
 }
 
 func (a *QueryAnalyzer) checkMissingIndex(query string, analysis *QueryAnalysis) {
 	// Simple heuristic - look for WHERE without index hint
 	if contains(query, "WHERE") && !contains(query, "INDEX") {
-		analysis.Suggestions = append(analysis.Suggestions, 
+		analysis.Suggestions = append(analysis.Suggestions,
 			"Consider adding an index on the WHERE clause columns")
 	}
 }
@@ -215,7 +215,7 @@ func (a *QueryAnalyzer) checkFullTableScan(query string, analysis *QueryAnalysis
 	// Look for SELECT * without WHERE
 	if contains(query, "SELECT *") && !contains(query, "WHERE") && !contains(query, "LIMIT") {
 		analysis.Issues = append(analysis.Issues, "Potential full table scan detected")
-		analysis.Suggestions = append(analysis.Suggestions, 
+		analysis.Suggestions = append(analysis.Suggestions,
 			"Add WHERE clause or LIMIT to avoid full table scan")
 	}
 }
@@ -224,7 +224,7 @@ func (a *QueryAnalyzer) checkNPlusOne(query string, analysis *QueryAnalysis) {
 	// Simple detection - multiple similar queries
 	// This would need more context in real implementation
 	if contains(query, "SELECT") && contains(query, "WHERE") && contains(query, "id = ") {
-		analysis.Suggestions = append(analysis.Suggestions, 
+		analysis.Suggestions = append(analysis.Suggestions,
 			"Consider using batch loading or JOIN to avoid N+1 queries")
 	}
 }
@@ -232,7 +232,7 @@ func (a *QueryAnalyzer) checkNPlusOne(query string, analysis *QueryAnalysis) {
 func (a *QueryAnalyzer) checkMissingLimit(query string, analysis *QueryAnalysis) {
 	// Check for SELECT without LIMIT
 	if contains(query, "SELECT") && !contains(query, "LIMIT") && !contains(query, "COUNT(") {
-		analysis.Suggestions = append(analysis.Suggestions, 
+		analysis.Suggestions = append(analysis.Suggestions,
 			"Consider adding LIMIT clause to prevent loading too many records")
 	}
 }
@@ -248,8 +248,8 @@ type QueryAnalysis struct {
 
 // Helper function for string contains (case-insensitive)
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		(s == substr || 
-		 fmt.Sprintf("%s", s) != "" && 
-		 fmt.Sprintf("%s", substr) != "")
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			fmt.Sprintf("%s", s) != "" &&
+				fmt.Sprintf("%s", substr) != "")
 }

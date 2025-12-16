@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/linkflow-go/internal/services/auth/jwt"
+	"github.com/linkflow-go/pkg/auth/jwt"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -48,7 +48,7 @@ func (m *JWTMiddleware) Handle() gin.HandlerFunc {
 				return
 			}
 		}
-		
+
 		// Extract token from Authorization header
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -56,7 +56,7 @@ func (m *JWTMiddleware) Handle() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		// Validate Bearer scheme
 		const bearerScheme = "Bearer "
 		if !strings.HasPrefix(authHeader, bearerScheme) {
@@ -64,9 +64,9 @@ func (m *JWTMiddleware) Handle() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		token := authHeader[len(bearerScheme):]
-		
+
 		// Check if token is blacklisted (for logout functionality)
 		if m.redis != nil {
 			blacklisted, _ := m.redis.Exists(context.Background(), "blacklist:"+token).Result()
@@ -76,7 +76,7 @@ func (m *JWTMiddleware) Handle() gin.HandlerFunc {
 				return
 			}
 		}
-		
+
 		// Validate token
 		claims, err := m.jwtManager.ValidateToken(token)
 		if err != nil {
@@ -84,14 +84,14 @@ func (m *JWTMiddleware) Handle() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		// Set user context
 		c.Set("userId", claims.UserID)
 		c.Set("email", claims.Email)
 		c.Set("roles", claims.Roles)
 		c.Set("permissions", claims.Permissions)
 		c.Set("token", token)
-		
+
 		c.Next()
 	}
 }
@@ -105,14 +105,14 @@ func RequireRoles(roles ...string) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		userRolesList, ok := userRoles.([]string)
 		if !ok {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid roles format"})
 			c.Abort()
 			return
 		}
-		
+
 		// Check if user has any of the required roles
 		hasRole := false
 		for _, requiredRole := range roles {
@@ -126,13 +126,13 @@ func RequireRoles(roles ...string) gin.HandlerFunc {
 				break
 			}
 		}
-		
+
 		if !hasRole {
 			c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
 			c.Abort()
 			return
 		}
-		
+
 		c.Next()
 	}
 }
@@ -146,14 +146,14 @@ func RequirePermissions(permissions ...string) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		userPermsList, ok := userPermissions.([]string)
 		if !ok {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid permissions format"})
 			c.Abort()
 			return
 		}
-		
+
 		// Check if user has all required permissions
 		for _, requiredPerm := range permissions {
 			hasPerm := false
@@ -163,14 +163,14 @@ func RequirePermissions(permissions ...string) gin.HandlerFunc {
 					break
 				}
 			}
-			
+
 			if !hasPerm {
 				c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
 				c.Abort()
 				return
 			}
 		}
-		
+
 		c.Next()
 	}
 }
@@ -181,7 +181,7 @@ func GetUserID(c *gin.Context) (string, bool) {
 	if !exists {
 		return "", false
 	}
-	
+
 	id, ok := userID.(string)
 	return id, ok
 }
@@ -192,7 +192,7 @@ func GetUserEmail(c *gin.Context) (string, bool) {
 	if !exists {
 		return "", false
 	}
-	
+
 	emailStr, ok := email.(string)
 	return emailStr, ok
 }
@@ -203,7 +203,7 @@ func GetUserRoles(c *gin.Context) ([]string, bool) {
 	if !exists {
 		return nil, false
 	}
-	
+
 	rolesList, ok := roles.([]string)
 	return rolesList, ok
 }
@@ -214,7 +214,7 @@ func GetUserPermissions(c *gin.Context) ([]string, bool) {
 	if !exists {
 		return nil, false
 	}
-	
+
 	permsList, ok := permissions.([]string)
 	return permsList, ok
 }

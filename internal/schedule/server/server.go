@@ -1,0 +1,196 @@
+package server
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/linkflow-go/internal/schedule/adapters/db/repository"
+	"github.com/linkflow-go/internal/schedule/app/scheduler"
+	"github.com/linkflow-go/pkg/config"
+	"github.com/linkflow-go/pkg/database"
+	"github.com/linkflow-go/pkg/events"
+	"github.com/linkflow-go/pkg/logger"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/v9"
+)
+
+type Server struct {
+	config     *config.Config
+	logger     logger.Logger
+	httpServer *http.Server
+	db         *database.DB
+	redis      *redis.Client
+	eventBus   events.EventBus
+	scheduler  *scheduler.CronScheduler
+}
+
+func New(cfg *config.Config, log logger.Logger) (*Server, error) {
+	// Initialize database
+	db, err := database.New(cfg.Database.ToDatabaseConfig())
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	// Initialize Redis
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     cfg.Redis.Addr(),
+		Password: cfg.Redis.Password,
+		DB:       cfg.Redis.DB,
+		PoolSize: cfg.Redis.PoolSize,
+	})
+
+	// Test Redis connection
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
+	}
+
+	// Initialize event bus
+	eventBus, err := events.NewKafkaEventBus(cfg.Kafka.ToKafkaConfig())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create event bus: %w", err)
+	}
+
+	// Initialize repository
+	schedRepo := repository.NewScheduleRepository(db)
+
+	// Initialize scheduler
+	cronScheduler := scheduler.NewCronScheduler(schedRepo, eventBus, redisClient, log)
+
+	// Setup HTTP server
+	router := setupRouter(log)
+
+	httpServer := &http.Server{
+		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
+		Handler:      router,
+		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
+	}
+
+	return &Server{
+		config:     cfg,
+		logger:     log,
+		httpServer: httpServer,
+		db:         db,
+		redis:      redisClient,
+		eventBus:   eventBus,
+		scheduler:  cronScheduler,
+	}, nil
+}
+
+func setupRouter(log logger.Logger) *gin.Engine {
+	router := gin.New()
+
+	// Middleware
+	router.Use(gin.Recovery())
+	router.Use(corsMiddleware())
+	router.Use(loggingMiddleware(log))
+
+	// Health checks
+	router.GET("/health/live", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
+	})
+	router.GET("/health/ready", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ready"})
+	})
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
+	// API routes
+	v1 := router.Group("/api/v1/schedules")
+	{
+		v1.GET("", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"schedules": []interface{}{}})
+		})
+		v1.POST("", func(c *gin.Context) {
+			c.JSON(http.StatusCreated, gin.H{"message": "Schedule created"})
+		})
+	}
+
+	return router
+}
+
+func (s *Server) Start() error {
+	// Start scheduler
+	go s.scheduler.Start(context.Background())
+
+	s.logger.Info("Starting HTTP server", "port", s.config.Server.Port)
+	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return fmt.Errorf("failed to start HTTP server: %w", err)
+	}
+	return nil
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.logger.Info("Shutting down server...")
+
+	// Stop scheduler
+	s.scheduler.Stop()
+
+	// Shutdown HTTP server
+	if err := s.httpServer.Shutdown(ctx); err != nil {
+		return fmt.Errorf("failed to shutdown HTTP server: %w", err)
+	}
+
+	// Close event bus
+	if err := s.eventBus.Close(); err != nil {
+		s.logger.Error("Failed to close event bus", "error", err)
+	}
+
+	// Close Redis
+	if err := s.redis.Close(); err != nil {
+		s.logger.Error("Failed to close Redis", "error", err)
+	}
+
+	// Close database
+	if err := s.db.Close(); err != nil {
+		s.logger.Error("Failed to close database", "error", err)
+	}
+
+	return nil
+}
+
+// Middleware functions
+func corsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
+}
+
+func loggingMiddleware(log logger.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
+		raw := c.Request.URL.RawQuery
+
+		c.Next()
+
+		latency := time.Since(start)
+		clientIP := c.ClientIP()
+		method := c.Request.Method
+		statusCode := c.Writer.Status()
+
+		if raw != "" {
+			path = path + "?" + raw
+		}
+
+		log.Info("HTTP Request",
+			"method", method,
+			"path", path,
+			"status", statusCode,
+			"latency", latency,
+			"ip", clientIP,
+		)
+	}
+}

@@ -28,7 +28,7 @@ type Config struct {
 func New(cfg Config) (*DB, error) {
 	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Name, cfg.SSLMode)
-	
+
 	gormConfig := &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
 		NowFunc: func() time.Time {
@@ -36,30 +36,30 @@ func New(cfg Config) (*DB, error) {
 		},
 		QueryFields: true,
 	}
-	
+
 	db, err := gorm.Open(postgres.Open(dsn), gormConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
-	
+
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database instance: %w", err)
 	}
-	
+
 	// Configure connection pool
 	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
 	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
 	sqlDB.SetConnMaxLifetime(time.Hour)
-	
+
 	// Test connection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	if err := sqlDB.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
-	
+
 	return &DB{DB: db}, nil
 }
 
@@ -124,33 +124,33 @@ func (db *DB) Count(ctx context.Context, model interface{}, conditions ...interf
 
 // Pagination helper
 type Pagination struct {
-	Limit  int
-	Page   int
-	Sort   string
-	Total  int64
-	Pages  int
+	Limit int
+	Page  int
+	Sort  string
+	Total int64
+	Pages int
 }
 
 func (db *DB) Paginate(ctx context.Context, dest interface{}, pagination *Pagination, conditions ...interface{}) error {
 	query := db.WithContext(ctx)
-	
+
 	// Apply conditions
 	if len(conditions) > 0 {
 		query = query.Where(conditions[0], conditions[1:]...)
 	}
-	
+
 	// Count total records
 	var total int64
 	if err := query.Model(dest).Count(&total).Error; err != nil {
 		return err
 	}
 	pagination.Total = total
-	
+
 	// Calculate pages
 	if pagination.Limit > 0 {
 		pagination.Pages = int((total + int64(pagination.Limit) - 1) / int64(pagination.Limit))
 	}
-	
+
 	// Apply pagination
 	if pagination.Limit > 0 {
 		query = query.Limit(pagination.Limit)
@@ -159,11 +159,11 @@ func (db *DB) Paginate(ctx context.Context, dest interface{}, pagination *Pagina
 		offset := (pagination.Page - 1) * pagination.Limit
 		query = query.Offset(offset)
 	}
-	
+
 	// Apply sorting
 	if pagination.Sort != "" {
 		query = query.Order(pagination.Sort)
 	}
-	
+
 	return query.Find(dest).Error
 }

@@ -14,12 +14,12 @@ import (
 
 // AggregateRoot is the base for all aggregates
 type AggregateRoot struct {
-	ID             string
-	Version        int
-	Changes        []Event
-	EventHandlers  map[string]EventHandler
-	correlationID  string
-	userID         string
+	ID            string
+	Version       int
+	Changes       []Event
+	EventHandlers map[string]EventHandler
+	correlationID string
+	userID        string
 }
 
 // NewAggregateRoot creates a new aggregate root
@@ -27,7 +27,7 @@ func NewAggregateRoot(id string) *AggregateRoot {
 	if id == "" {
 		id = uuid.New().String()
 	}
-	
+
 	return &AggregateRoot{
 		ID:            id,
 		Version:       0,
@@ -43,7 +43,7 @@ func (a *AggregateRoot) ApplyChange(event Event) {
 	event.Timestamp = time.Now()
 	event.UserID = a.userID
 	event.CorrelationID = a.correlationID
-	
+
 	a.applyEvent(event, true)
 }
 
@@ -56,9 +56,9 @@ func (a *AggregateRoot) applyEvent(event Event, isNew bool) {
 		// Try to use reflection to call a method
 		a.applyEventViaReflection(event)
 	}
-	
+
 	a.Version = event.Version
-	
+
 	if isNew {
 		a.Changes = append(a.Changes, event)
 	}
@@ -68,7 +68,7 @@ func (a *AggregateRoot) applyEvent(event Event, isNew bool) {
 func (a *AggregateRoot) applyEventViaReflection(event Event) {
 	methodName := "Apply" + toPascalCase(event.Type)
 	method := reflect.ValueOf(a).MethodByName(methodName)
-	
+
 	if method.IsValid() {
 		method.Call([]reflect.Value{reflect.ValueOf(event)})
 	}
@@ -113,7 +113,7 @@ func (a *AggregateRoot) GetVersion() int {
 
 // Repository provides common repository operations for aggregates
 type Repository struct {
-	eventStore EventStore
+	eventStore       EventStore
 	aggregateFactory AggregateFactory
 }
 
@@ -144,21 +144,21 @@ func (r *Repository) Load(ctx context.Context, aggregateID string) (Aggregate, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to load snapshot: %w", err)
 	}
-	
+
 	aggregate := r.aggregateFactory()
-	
+
 	if snapshot != nil {
 		// Load from snapshot
 		if err := r.loadFromSnapshot(aggregate, snapshot); err != nil {
 			return nil, fmt.Errorf("failed to load from snapshot: %w", err)
 		}
-		
+
 		// Load events after snapshot
 		events, err := r.eventStore.LoadFromVersion(ctx, aggregateID, snapshot.Version)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load events: %w", err)
 		}
-		
+
 		aggregate.LoadFromEvents(events)
 	} else {
 		// Load all events
@@ -166,14 +166,14 @@ func (r *Repository) Load(ctx context.Context, aggregateID string) (Aggregate, e
 		if err != nil {
 			return nil, fmt.Errorf("failed to load events: %w", err)
 		}
-		
+
 		if len(events) == 0 {
 			return nil, errors.New("aggregate not found")
 		}
-		
+
 		aggregate.LoadFromEvents(events)
 	}
-	
+
 	return aggregate, nil
 }
 
@@ -183,19 +183,19 @@ func (r *Repository) Save(ctx context.Context, aggregate Aggregate) error {
 	if len(changes) == 0 {
 		return nil // No changes to save
 	}
-	
+
 	if err := r.eventStore.Save(ctx, changes); err != nil {
 		return fmt.Errorf("failed to save events: %w", err)
 	}
-	
+
 	aggregate.MarkChangesAsCommitted()
-	
+
 	// Check if we should create a snapshot
 	// This is typically done asynchronously in production
 	if aggregate.GetVersion()%10 == 0 {
 		_ = r.createSnapshot(ctx, aggregate)
 	}
-	
+
 	return nil
 }
 
@@ -212,36 +212,36 @@ func (r *Repository) createSnapshot(ctx context.Context, aggregate Aggregate) er
 	if err != nil {
 		return err
 	}
-	
+
 	snapshot := &Snapshot{
 		AggregateID: aggregate.GetID(),
 		Version:     aggregate.GetVersion(),
 		State:       state,
 		Timestamp:   time.Now(),
 	}
-	
+
 	return r.eventStore.SaveSnapshot(ctx, snapshot)
 }
 
 // Saga represents a long-running process that coordinates between aggregates
 type Saga struct {
-	ID            string
-	State         string
-	StartedAt     time.Time
-	CompletedAt   *time.Time
-	Steps         []SagaStep
-	CurrentStep   int
+	ID             string
+	State          string
+	StartedAt      time.Time
+	CompletedAt    *time.Time
+	Steps          []SagaStep
+	CurrentStep    int
 	CompensateFrom int
 }
 
 // SagaStep represents a step in a saga
 type SagaStep struct {
-	Name         string
-	Execute      func(ctx context.Context) error
-	Compensate   func(ctx context.Context) error
-	Completed    bool
-	CompletedAt  *time.Time
-	Error        error
+	Name        string
+	Execute     func(ctx context.Context) error
+	Compensate  func(ctx context.Context) error
+	Completed   bool
+	CompletedAt *time.Time
+	Error       error
 }
 
 // SagaCoordinator manages saga execution
@@ -260,32 +260,32 @@ func NewSagaCoordinator(eventStore EventStore) *SagaCoordinator {
 func (c *SagaCoordinator) Execute(ctx context.Context, saga *Saga) error {
 	saga.StartedAt = time.Now()
 	saga.State = "running"
-	
+
 	for i, step := range saga.Steps {
 		saga.CurrentStep = i
-		
+
 		if err := step.Execute(ctx); err != nil {
 			step.Error = err
 			saga.State = "compensating"
 			saga.CompensateFrom = i
-			
+
 			// Start compensation
 			return c.compensate(ctx, saga)
 		}
-		
+
 		step.Completed = true
 		now := time.Now()
 		step.CompletedAt = &now
 		saga.Steps[i] = step
-		
+
 		// Record saga progress event
 		c.recordSagaEvent(saga, fmt.Sprintf("completed_step_%s", step.Name))
 	}
-	
+
 	saga.State = "completed"
 	now := time.Now()
 	saga.CompletedAt = &now
-	
+
 	return nil
 }
 
@@ -293,7 +293,7 @@ func (c *SagaCoordinator) Execute(ctx context.Context, saga *Saga) error {
 func (c *SagaCoordinator) compensate(ctx context.Context, saga *Saga) error {
 	for i := saga.CompensateFrom; i >= 0; i-- {
 		step := saga.Steps[i]
-		
+
 		if step.Compensate != nil {
 			if err := step.Compensate(ctx); err != nil {
 				// Log compensation failure but continue
@@ -303,11 +303,11 @@ func (c *SagaCoordinator) compensate(ctx context.Context, saga *Saga) error {
 			}
 		}
 	}
-	
+
 	saga.State = "compensated"
 	now := time.Now()
 	saga.CompletedAt = &now
-	
+
 	return fmt.Errorf("saga failed at step %d", saga.CompensateFrom)
 }
 
@@ -320,11 +320,11 @@ func (c *SagaCoordinator) recordSagaEvent(saga *Saga, eventType string) {
 		Version:     1,
 		Timestamp:   time.Now(),
 		Metadata: map[string]string{
-			"saga_state": saga.State,
+			"saga_state":   saga.State,
 			"current_step": fmt.Sprintf("%d", saga.CurrentStep),
 		},
 	}
-	
+
 	// Best effort - ignore errors
 	_ = c.eventStore.Save(context.Background(), []Event{event})
 }
@@ -344,10 +344,10 @@ func toPascalCase(s string) string {
 type EventProjector interface {
 	// Project processes an event and updates read models
 	Project(ctx context.Context, event Event) error
-	
+
 	// Rebuild rebuilds all projections from events
 	Rebuild(ctx context.Context) error
-	
+
 	// GetLastProcessedVersion returns the last processed event version
 	GetLastProcessedVersion(ctx context.Context) (int, error)
 }

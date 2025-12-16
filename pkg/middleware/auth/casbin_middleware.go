@@ -6,16 +6,15 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/linkflow-go/internal/services/auth/rbac"
 )
 
 // CasbinMiddleware provides RBAC authorization using Casbin
 type CasbinMiddleware struct {
-	enforcer *rbac.Enforcer
+	enforcer PermissionChecker
 }
 
 // NewCasbinMiddleware creates a new Casbin middleware
-func NewCasbinMiddleware(enforcer *rbac.Enforcer) *CasbinMiddleware {
+func NewCasbinMiddleware(enforcer PermissionChecker) *CasbinMiddleware {
 	return &CasbinMiddleware{
 		enforcer: enforcer,
 	}
@@ -30,7 +29,7 @@ func (m *CasbinMiddleware) Authorize() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		
+
 		// Check if this is a service-to-service call
 		isService, _ := c.Get("isService")
 		if isServiceBool, ok := isService.(bool); ok && isServiceBool {
@@ -38,7 +37,7 @@ func (m *CasbinMiddleware) Authorize() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		
+
 		// Get user ID from context (set by JWT middleware)
 		userID, exists := c.Get("userId")
 		if !exists {
@@ -46,24 +45,24 @@ func (m *CasbinMiddleware) Authorize() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		userIDStr, ok := userID.(string)
 		if !ok {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user ID format"})
 			c.Abort()
 			return
 		}
-		
+
 		// Get request path and method
 		obj := c.Request.URL.Path
 		act := methodToAction(c.Request.Method)
-		
+
 		// Special handling for "owned" resources
 		if strings.Contains(obj, "/owned/") {
 			// Replace "owned" with actual user ID for permission check
 			obj = strings.Replace(obj, "/owned/", fmt.Sprintf("/%s/", userIDStr), 1)
 		}
-		
+
 		// Check permission
 		allowed, err := m.enforcer.CheckPermission(userIDStr, obj, act)
 		if err != nil {
@@ -71,7 +70,7 @@ func (m *CasbinMiddleware) Authorize() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		if !allowed {
 			// Try checking with user's roles
 			roles, _ := c.Get("roles")
@@ -84,16 +83,16 @@ func (m *CasbinMiddleware) Authorize() gin.HandlerFunc {
 				}
 			}
 		}
-		
+
 		if !allowed {
 			c.JSON(http.StatusForbidden, gin.H{
-				"error": "permission denied",
+				"error":   "permission denied",
 				"details": fmt.Sprintf("user %s cannot %s %s", userIDStr, act, obj),
 			})
 			c.Abort()
 			return
 		}
-		
+
 		c.Next()
 	}
 }
@@ -108,14 +107,14 @@ func (m *CasbinMiddleware) RequirePermission(resource, action string) gin.Handle
 			c.Abort()
 			return
 		}
-		
+
 		userIDStr, ok := userID.(string)
 		if !ok {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user ID format"})
 			c.Abort()
 			return
 		}
-		
+
 		// Check permission
 		allowed, err := m.enforcer.CheckPermission(userIDStr, resource, action)
 		if err != nil {
@@ -123,7 +122,7 @@ func (m *CasbinMiddleware) RequirePermission(resource, action string) gin.Handle
 			c.Abort()
 			return
 		}
-		
+
 		// If not allowed directly, check through roles
 		if !allowed {
 			roles, _ := c.Get("roles")
@@ -136,16 +135,16 @@ func (m *CasbinMiddleware) RequirePermission(resource, action string) gin.Handle
 				}
 			}
 		}
-		
+
 		if !allowed {
 			c.JSON(http.StatusForbidden, gin.H{
-				"error": "permission denied",
+				"error":   "permission denied",
 				"details": fmt.Sprintf("requires permission: %s:%s", resource, action),
 			})
 			c.Abort()
 			return
 		}
-		
+
 		c.Next()
 	}
 }
@@ -159,14 +158,14 @@ func (m *CasbinMiddleware) RequireRole(requiredRoles ...string) gin.HandlerFunc 
 			c.Abort()
 			return
 		}
-		
+
 		userIDStr, ok := userID.(string)
 		if !ok {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user ID format"})
 			c.Abort()
 			return
 		}
-		
+
 		// Get user's roles from Casbin
 		userRoles, err := m.enforcer.GetRoles(userIDStr)
 		if err != nil {
@@ -174,7 +173,7 @@ func (m *CasbinMiddleware) RequireRole(requiredRoles ...string) gin.HandlerFunc 
 			c.Abort()
 			return
 		}
-		
+
 		// Check if user has any of the required roles
 		hasRole := false
 		for _, requiredRole := range requiredRoles {
@@ -188,19 +187,19 @@ func (m *CasbinMiddleware) RequireRole(requiredRoles ...string) gin.HandlerFunc 
 				break
 			}
 		}
-		
+
 		if !hasRole {
 			c.JSON(http.StatusForbidden, gin.H{
-				"error": "insufficient role",
+				"error":    "insufficient role",
 				"required": requiredRoles,
 			})
 			c.Abort()
 			return
 		}
-		
+
 		// Update roles in context for other middleware
 		c.Set("casbinRoles", userRoles)
-		
+
 		c.Next()
 	}
 }
@@ -235,12 +234,12 @@ func isPublicEndpoint(path string) bool {
 		"/api/v1/auth/reset-password",
 		"/api/v1/auth/oauth",
 	}
-	
+
 	for _, endpoint := range publicEndpoints {
 		if strings.HasPrefix(path, endpoint) {
 			return true
 		}
 	}
-	
+
 	return false
 }

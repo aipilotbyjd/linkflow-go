@@ -98,7 +98,7 @@ func (t *Telemetry) HTTPMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Extract trace context from headers
 		ctx := otel.GetTextMapPropagator().Extract(c.Request.Context(), propagation.HeaderCarrier(c.Request.Header))
-		
+
 		// Start span
 		spanName := fmt.Sprintf("%s %s", c.Request.Method, c.FullPath())
 		ctx, span := t.tracer.Start(ctx, spanName,
@@ -113,19 +113,19 @@ func (t *Telemetry) HTTPMiddleware() gin.HandlerFunc {
 			trace.WithSpanKind(trace.SpanKindServer),
 		)
 		defer span.End()
-		
+
 		// Store span in context
 		c.Request = c.Request.WithContext(ctx)
-		
+
 		// Process request
 		c.Next()
-		
+
 		// Set response attributes
 		span.SetAttributes(
 			semconv.HTTPStatusCodeKey.Int(c.Writer.Status()),
 			semconv.HTTPResponseContentLengthKey.Int(c.Writer.Size()),
 		)
-		
+
 		// Set span status based on HTTP status
 		if c.Writer.Status() >= 400 {
 			span.SetStatus(codes.Error, fmt.Sprintf("HTTP %d", c.Writer.Status()))

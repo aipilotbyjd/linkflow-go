@@ -116,7 +116,7 @@ jobs:
       run: |
         gotestsum --format testname -- \
           -v -race -coverprofile=coverage.out -covermode=atomic \
-          ./internal/services/${{ matrix.service }}/...
+          ./internal/${{ matrix.service }}/...
 
     - name: Run integration tests
       if: success()
@@ -155,6 +155,11 @@ jobs:
       with:
         go-version: ${{ env.GO_VERSION }}
         cache: true
+
+    - name: Install security tools
+      run: |
+        go install github.com/sonatype-nexus-community/nancy@latest
+        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
     - name: Run gosec security scanner
       uses: securego/gosec@master

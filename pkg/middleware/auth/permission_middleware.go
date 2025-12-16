@@ -36,24 +36,24 @@ func RequireResourcePermission(resource, action string) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		userPerms, ok := permissions.([]string)
 		if !ok {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid permissions format"})
 			c.Abort()
 			return
 		}
-		
+
 		// Check if user has the required permission
 		requiredPerm := fmt.Sprintf("%s:%s", resource, action)
 		hasPermission := false
-		
+
 		for _, perm := range userPerms {
 			if perm == requiredPerm || perm == "*:*" { // Super admin has all permissions
 				hasPermission = true
 				break
 			}
-			
+
 			// Check for wildcard permissions
 			if strings.HasSuffix(perm, ":*") {
 				permResource := strings.TrimSuffix(perm, ":*")
@@ -62,7 +62,7 @@ func RequireResourcePermission(resource, action string) gin.HandlerFunc {
 					break
 				}
 			}
-			
+
 			if strings.HasPrefix(perm, "*:") {
 				permAction := strings.TrimPrefix(perm, "*:")
 				if permAction == action {
@@ -71,7 +71,7 @@ func RequireResourcePermission(resource, action string) gin.HandlerFunc {
 				}
 			}
 		}
-		
+
 		if !hasPermission {
 			c.JSON(http.StatusForbidden, gin.H{
 				"error": fmt.Sprintf("permission denied for %s:%s", resource, action),
@@ -79,7 +79,7 @@ func RequireResourcePermission(resource, action string) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		c.Next()
 	}
 }
@@ -93,14 +93,14 @@ func RequireOwnership(getResourceOwnerFunc func(c *gin.Context) (string, error))
 			c.Abort()
 			return
 		}
-		
+
 		userIDStr, ok := userID.(string)
 		if !ok {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user ID format"})
 			c.Abort()
 			return
 		}
-		
+
 		// Check if user is admin (admins can access everything)
 		roles, _ := c.Get("roles")
 		if rolesList, ok := roles.([]string); ok {
@@ -111,7 +111,7 @@ func RequireOwnership(getResourceOwnerFunc func(c *gin.Context) (string, error))
 				}
 			}
 		}
-		
+
 		// Get the resource owner
 		ownerID, err := getResourceOwnerFunc(c)
 		if err != nil {
@@ -119,14 +119,14 @@ func RequireOwnership(getResourceOwnerFunc func(c *gin.Context) (string, error))
 			c.Abort()
 			return
 		}
-		
+
 		// Check ownership
 		if ownerID != userIDStr {
 			c.JSON(http.StatusForbidden, gin.H{"error": "you don't have permission to access this resource"})
 			c.Abort()
 			return
 		}
-		
+
 		c.Next()
 	}
 }
@@ -149,13 +149,13 @@ func (s *ServiceToServiceAuth) Validate() gin.HandlerFunc {
 		// Check for service token header
 		serviceToken := c.GetHeader("X-Service-Token")
 		serviceName := c.GetHeader("X-Service-Name")
-		
+
 		if serviceToken == "" || serviceName == "" {
 			// Not a service-to-service request, continue with normal auth
 			c.Next()
 			return
 		}
-		
+
 		// Validate service token
 		expectedToken, exists := s.serviceTokens[serviceName]
 		if !exists || expectedToken != serviceToken {
@@ -163,14 +163,14 @@ func (s *ServiceToServiceAuth) Validate() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		// Set service context
 		c.Set("isService", true)
 		c.Set("serviceName", serviceName)
-		
+
 		// Services have all permissions
 		c.Set("permissions", []string{"*:*"})
-		
+
 		c.Next()
 	}
 }
@@ -191,18 +191,18 @@ func CombineMiddleware(middlewares ...gin.HandlerFunc) gin.HandlerFunc {
 // Common permission constants
 const (
 	// Resources
-	ResourceUser     = "user"
-	ResourceWorkflow = "workflow"
-	ResourceNode     = "node"
+	ResourceUser       = "user"
+	ResourceWorkflow   = "workflow"
+	ResourceNode       = "node"
 	ResourceCredential = "credential"
-	ResourceAnalytics = "analytics"
-	ResourceSchedule  = "schedule"
-	
+	ResourceAnalytics  = "analytics"
+	ResourceSchedule   = "schedule"
+
 	// Actions
-	ActionCreate = "create"
-	ActionRead   = "read"
-	ActionUpdate = "update"
-	ActionDelete = "delete"
+	ActionCreate  = "create"
+	ActionRead    = "read"
+	ActionUpdate  = "update"
+	ActionDelete  = "delete"
 	ActionExecute = "execute"
-	ActionList   = "list"
+	ActionList    = "list"
 )

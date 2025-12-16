@@ -30,14 +30,14 @@ type Config struct {
 
 func New(cfg Config) Logger {
 	config := zap.NewProductionConfig()
-	
+
 	// Set log level
 	level, err := zapcore.ParseLevel(cfg.Level)
 	if err != nil {
 		level = zapcore.InfoLevel
 	}
 	config.Level = zap.NewAtomicLevelAt(level)
-	
+
 	// Set output format
 	if cfg.Format == "console" {
 		config.Encoding = "console"
@@ -46,7 +46,7 @@ func New(cfg Config) Logger {
 	} else {
 		config.Encoding = "json"
 	}
-	
+
 	// Set output
 	if cfg.Output == "stdout" {
 		config.OutputPaths = []string{"stdout"}
@@ -55,25 +55,25 @@ func New(cfg Config) Logger {
 		config.OutputPaths = []string{cfg.Output}
 		config.ErrorOutputPaths = []string{cfg.Output}
 	}
-	
+
 	// Add caller info
 	if cfg.AddCaller {
 		config.EncoderConfig.CallerKey = "caller"
 		config.EncoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
 	}
-	
+
 	// Add stacktrace
 	if cfg.Stacktrace {
 		config.Development = true
 	}
-	
+
 	// Build logger
 	logger, err := config.Build()
 	if err != nil {
 		// Fallback to default logger
 		logger = zap.NewExample()
 	}
-	
+
 	return &zapLogger{
 		logger: logger.Sugar(),
 	}

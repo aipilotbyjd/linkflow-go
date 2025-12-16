@@ -16,10 +16,10 @@ import (
 type Projection interface {
 	// Handle processes an event and updates the read model
 	Handle(ctx context.Context, event eventsourcing.Event) error
-	
+
 	// Reset clears the projection and rebuilds from scratch
 	Reset(ctx context.Context) error
-	
+
 	// GetName returns the projection name
 	GetName() string
 }
@@ -49,7 +49,7 @@ func NewProjectionManager(eventStore eventsourcing.EventStore, db *gorm.DB) *Pro
 func (pm *ProjectionManager) Register(projection Projection) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	
+
 	pm.projections[projection.GetName()] = projection
 }
 
@@ -62,15 +62,15 @@ func (pm *ProjectionManager) Start(ctx context.Context) error {
 	}
 	pm.running = true
 	pm.mu.Unlock()
-	
+
 	// Load last processed position
 	if err := pm.loadPosition(); err != nil {
 		return err
 	}
-	
+
 	// Start processing in background
 	go pm.processEvents(ctx)
-	
+
 	return nil
 }
 
@@ -78,7 +78,7 @@ func (pm *ProjectionManager) Start(ctx context.Context) error {
 func (pm *ProjectionManager) Stop() {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	
+
 	if pm.running {
 		close(pm.stopChan)
 		pm.running = false
@@ -89,7 +89,7 @@ func (pm *ProjectionManager) Stop() {
 func (pm *ProjectionManager) processEvents(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -103,7 +103,7 @@ func (pm *ProjectionManager) processEvents(ctx context.Context) {
 				// Log error and continue
 				continue
 			}
-			
+
 			// Process events
 			for _, event := range events {
 				if err := pm.processEvent(ctx, event); err != nil {
@@ -123,7 +123,7 @@ func (pm *ProjectionManager) processEvent(ctx context.Context, event eventsourci
 		projections = append(projections, p)
 	}
 	pm.mu.RUnlock()
-	
+
 	// Process event through each projection
 	for _, projection := range projections {
 		if err := projection.Handle(ctx, event); err != nil {
@@ -131,7 +131,7 @@ func (pm *ProjectionManager) processEvent(ctx context.Context, event eventsourci
 			_ = err
 		}
 	}
-	
+
 	// Update position
 	return pm.updatePosition(event)
 }
@@ -162,9 +162,9 @@ func (pm *ProjectionManager) updatePosition(event eventsourcing.Event) error {
 		Position:       pm.lastPosition + 1,
 		UpdatedAt:      time.Now(),
 	}
-	
+
 	pm.lastPosition = position.Position
-	
+
 	return pm.db.Save(position).Error
 }
 
@@ -172,30 +172,30 @@ func (pm *ProjectionManager) updatePosition(event eventsourcing.Event) error {
 func (pm *ProjectionManager) Rebuild(ctx context.Context) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	
+
 	// Reset all projections
 	for _, projection := range pm.projections {
 		if err := projection.Reset(ctx); err != nil {
 			return fmt.Errorf("failed to reset projection %s: %w", projection.GetName(), err)
 		}
 	}
-	
+
 	// Reset position
 	pm.lastPosition = 0
-	
+
 	// Query all events and replay
 	// This would typically be done in batches for large event stores
 	events := []eventsourcing.Event{} // Would load from event store
-	
+
 	for _, event := range events {
 		for _, projection := range pm.projections {
 			if err := projection.Handle(ctx, event); err != nil {
-				return fmt.Errorf("failed to handle event in projection %s: %w", 
+				return fmt.Errorf("failed to handle event in projection %s: %w",
 					projection.GetName(), err)
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -257,7 +257,7 @@ func (p *WorkflowListProjection) handleWorkflowCreated(ctx context.Context, even
 	if err := json.Unmarshal(event.Payload, &payload); err != nil {
 		return err
 	}
-	
+
 	view := &WorkflowListView{
 		ID:          event.AggregateID,
 		Name:        payload["name"].(string),
@@ -268,7 +268,7 @@ func (p *WorkflowListProjection) handleWorkflowCreated(ctx context.Context, even
 		CreatedAt:   event.Timestamp,
 		UpdatedAt:   event.Timestamp,
 	}
-	
+
 	return p.db.WithContext(ctx).Create(view).Error
 }
 
@@ -277,19 +277,19 @@ func (p *WorkflowListProjection) handleWorkflowUpdated(ctx context.Context, even
 	if err := json.Unmarshal(event.Payload, &payload); err != nil {
 		return err
 	}
-	
+
 	updates := map[string]interface{}{
 		"updated_at": event.Timestamp,
 	}
-	
+
 	if name, ok := payload["name"].(string); ok {
 		updates["name"] = name
 	}
-	
+
 	if description, ok := payload["description"].(string); ok {
 		updates["description"] = description
 	}
-	
+
 	return p.db.WithContext(ctx).
 		Model(&WorkflowListView{}).
 		Where("id = ?", event.AggregateID).
@@ -326,20 +326,20 @@ func (p *WorkflowListProjection) handleWorkflowDeactivated(ctx context.Context, 
 
 // WorkflowListView is the read model for workflow list
 type WorkflowListView struct {
-	ID                string    `gorm:"primaryKey"`
-	Name              string    `gorm:"not null;index"`
-	Description       string
-	UserID            string    `gorm:"not null;index"`
-	TeamID            string    `gorm:"index"`
-	Status            string    `gorm:"index"`
-	IsActive          bool      `gorm:"index"`
-	ExecutionCount    int       `gorm:"default:0"`
-	LastExecutedAt    *time.Time
-	SuccessRate       float64   `gorm:"default:0"`
-	AverageExecutionTime int64  `gorm:"default:0"`
-	Tags              string    // JSON array stored as string
-	CreatedAt         time.Time `gorm:"index"`
-	UpdatedAt         time.Time `gorm:"index"`
+	ID                   string `gorm:"primaryKey"`
+	Name                 string `gorm:"not null;index"`
+	Description          string
+	UserID               string `gorm:"not null;index"`
+	TeamID               string `gorm:"index"`
+	Status               string `gorm:"index"`
+	IsActive             bool   `gorm:"index"`
+	ExecutionCount       int    `gorm:"default:0"`
+	LastExecutedAt       *time.Time
+	SuccessRate          float64   `gorm:"default:0"`
+	AverageExecutionTime int64     `gorm:"default:0"`
+	Tags                 string    // JSON array stored as string
+	CreatedAt            time.Time `gorm:"index"`
+	UpdatedAt            time.Time `gorm:"index"`
 }
 
 // ExecutionStatsProjection maintains execution statistics
@@ -385,15 +385,15 @@ func (p *ExecutionStatsProjection) handleExecutionStarted(ctx context.Context, e
 	if err := json.Unmarshal(event.Payload, &payload); err != nil {
 		return err
 	}
-	
+
 	workflowID := payload["workflow_id"].(string)
-	
+
 	// Update workflow list view
 	return p.db.WithContext(ctx).
 		Model(&WorkflowListView{}).
 		Where("id = ?", workflowID).
 		Updates(map[string]interface{}{
-			"execution_count": gorm.Expr("execution_count + ?", 1),
+			"execution_count":  gorm.Expr("execution_count + ?", 1),
 			"last_executed_at": event.Timestamp,
 		}).Error
 }
@@ -403,10 +403,10 @@ func (p *ExecutionStatsProjection) handleExecutionCompleted(ctx context.Context,
 	if err := json.Unmarshal(event.Payload, &payload); err != nil {
 		return err
 	}
-	
+
 	workflowID := payload["workflow_id"].(string)
 	executionTime := int64(payload["execution_time"].(float64))
-	
+
 	// Get current stats
 	var view WorkflowListView
 	if err := p.db.WithContext(ctx).
@@ -414,11 +414,11 @@ func (p *ExecutionStatsProjection) handleExecutionCompleted(ctx context.Context,
 		First(&view).Error; err != nil {
 		return err
 	}
-	
+
 	// Calculate new average execution time
-	newAvg := (view.AverageExecutionTime*int64(view.ExecutionCount) + executionTime) / 
+	newAvg := (view.AverageExecutionTime*int64(view.ExecutionCount) + executionTime) /
 		int64(view.ExecutionCount+1)
-	
+
 	// Update stats
 	return p.db.WithContext(ctx).
 		Model(&WorkflowListView{}).
@@ -434,13 +434,13 @@ func (p *ExecutionStatsProjection) handleExecutionFailed(ctx context.Context, ev
 	if err := json.Unmarshal(event.Payload, &payload); err != nil {
 		return err
 	}
-	
+
 	workflowID := payload["workflow_id"].(string)
-	
+
 	// This would update success rate calculation
 	// Implementation depends on how you track success/failure counts
 	_ = workflowID
-	
+
 	return nil
 }
 
@@ -467,18 +467,18 @@ func NewWorkflowListQuery(db *gorm.DB) *WorkflowListQuery {
 // List returns workflows from the read model
 func (q *WorkflowListQuery) List(ctx context.Context, userID string, limit, offset int) ([]*WorkflowListView, error) {
 	var workflows []*WorkflowListView
-	
+
 	query := q.db.WithContext(ctx)
 	if userID != "" {
 		query = query.Where("user_id = ?", userID)
 	}
-	
+
 	err := query.
 		Order("updated_at DESC").
 		Limit(limit).
 		Offset(offset).
 		Find(&workflows).Error
-	
+
 	return workflows, err
 }
 
@@ -488,24 +488,24 @@ func (q *WorkflowListQuery) GetByID(ctx context.Context, id string) (*WorkflowLi
 	err := q.db.WithContext(ctx).
 		Where("id = ?", id).
 		First(&workflow).Error
-	
+
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
-	
+
 	return &workflow, err
 }
 
 // Search searches workflows in the read model
 func (q *WorkflowListQuery) Search(ctx context.Context, query string) ([]*WorkflowListView, error) {
 	var workflows []*WorkflowListView
-	
+
 	searchTerm := "%" + query + "%"
 	err := q.db.WithContext(ctx).
 		Where("name ILIKE ? OR description ILIKE ?", searchTerm, searchTerm).
 		Order("updated_at DESC").
 		Limit(50).
 		Find(&workflows).Error
-	
+
 	return workflows, err
 }

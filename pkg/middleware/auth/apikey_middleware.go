@@ -1,15 +1,15 @@
 package auth
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/linkflow-go/internal/services/auth/apikey"
 )
 
 // APIKeyMiddleware creates middleware that authenticates requests using API keys
-func APIKeyMiddleware(apiKeyService *apikey.APIKeyService) gin.HandlerFunc {
+func APIKeyMiddleware(apiKeyValidator APIKeyValidator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Check for API key in header
 		apiKeyHeader := c.GetHeader("X-API-Key")
@@ -27,8 +27,14 @@ func APIKeyMiddleware(apiKeyService *apikey.APIKeyService) gin.HandlerFunc {
 			return
 		}
 
+		if apiKeyValidator == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "API key validation not configured"})
+			c.Abort()
+			return
+		}
+
 		// Validate the API key
-		key, err := apiKeyService.Validate(c.Request.Context(), apiKeyHeader)
+		key, err := apiKeyValidator.Validate(c.Request.Context(), apiKeyHeader)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			c.Abort()
@@ -61,6 +67,13 @@ func CombinedAuthMiddleware(jwtMiddleware, apiKeyMiddleware gin.HandlerFunc) gin
 		// Otherwise, try JWT authentication
 		jwtMiddleware(c)
 	}
+}
+
+// APIKeyValidatorFunc adapts a function to APIKeyValidator.
+type APIKeyValidatorFunc func(ctx context.Context, rawKey string) (*APIKeyInfo, error)
+
+func (f APIKeyValidatorFunc) Validate(ctx context.Context, rawKey string) (*APIKeyInfo, error) {
+	return f(ctx, rawKey)
 }
 
 // RequireAPIKeyPermission creates middleware that checks for specific API key permission
